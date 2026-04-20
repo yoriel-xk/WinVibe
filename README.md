@@ -1,101 +1,131 @@
 # WinVibe
 
-> Windows / Linux 平台的 AI Agent 监控 HUD — [Vibe Island](https://vibeisland.app) 的对等工具
+**你的 Agent 在工作。你也该在工作。**
+
+WinVibe 是一个 32px 的悬浮 HUD，常驻屏幕顶部。多个 AI 编程 Agent 的实时状态、权限审批、任务进度——一眼尽收，无需切换终端。
+
+Windows 和 Linux，现在有了 [Vibe Island](https://vibeisland.app) 的对等工具。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)](#兼容性)
-[![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%2B%20Rust%20%2B%20React-orange)](#技术栈)
+&nbsp;
+[![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux-lightgrey)](#兼容性)
+
+<br>
 
 ---
 
-## 是什么
-
-WinVibe 是一个常驻屏幕顶部的半透明悬浮 HUD，实时显示所有在后台运行的 AI 编程 Agent（Claude Code、Codex、Gemini CLI 等）的状态，并在 Agent 请求权限审批时立即弹出提示——无需切换到终端，不打断心流。
-
-macOS 有 Dynamic Island 和 Vibe Island，Windows / Linux 开发者此前没有对等工具，WinVibe 填补这一空白。
-
----
-
-## 演示
+## 它长这样
 
 ```
-折叠态（32px，常驻屏幕顶部）
-┌──────────────────────────────────────────────────────────────┐
-│  ● Claude Code  编辑中  fix auth bug  │  ●² Codex  等待中  db query  │
-└──────────────────────────────────────────────────────────────┘
+● Claude Code  编辑中  fix auth bug  │  ●² Codex  等待中  db query
+```
 
-展开态（审批视图）
+*折叠态。32px，始终在顶部，从不遮挡你的工作。*
+
+<br>
+
+Agent 请求权限审批时，HUD 展开：
+
+```
 ┌──────────────────────────────────────────────────┐
 │  ● Codex   db/queries.ts                  ⤴ 跳转 │
 │  ─────────────────────────────────────────────── │
 │  权限请求：Edit                            4:23  │
-│  ┌──────────────────────────────────────────────┐│
-│  │ + return await db.query(sql, params);        ││
-│  │ - return db.query(sql + userInput);          ││
-│  └──────────────────────────────────────────────┘│
-│  [ Approve ]  [ Deny ]   Feedback...             │
-│  ─── 队列 (2) ─────────────────  全部 Deny       │
+│                                                  │
+│  + return await db.query(sql, params);           │
+│  - return db.query(sql + userInput);             │
+│                                                  │
+│  [ Approve ]   [ Deny ]   Feedback...            │
+│  ─── 队列 (2) ──────────────────  全部 Deny ─── │
 │  │● Claude  Edit auth.ts                  查看  │
 │   ● Gemini  Write tests/auth.test.ts      查看  │
 └──────────────────────────────────────────────────┘
 ```
 
+*一键 Approve 或 Deny。不离开当前窗口。*
+
+<br>
+
 ---
 
-## 核心功能
+## 为什么是 WinVibe
 
-| 功能 | 说明 |
+AI Agent 越来越普遍地在后台持续运行。开发者面临三个痛点：
+
+- **切换成本高** — 频繁切换到终端查看进度，打断心流
+- **审批时机难把握** — Agent 等待权限时你不知道，流程悄悄卡死
+- **多 Agent 无全局视角** — 同时跑三个 Agent，靠记忆维护状态
+
+WinVibe 把这三个问题压缩进 32px。
+
+<br>
+
+---
+
+## 核心能力
+
+**多 Agent，统一视角**
+同时追踪 Claude Code、Codex、Gemini CLI 及任意支持 hook 的 Agent。状态、活动、任务摘要，折叠态一览无余。
+
+**权限审批，零延迟**
+Agent 发出 PreToolUse 请求的瞬间，HUD 橙色闪烁。展开即见 diff，`Y` 通过，`N` 拒绝。多条请求自动排队，支持批量 Deny。
+
+**终端跳转，一键聚焦**
+点击 ⤴ 跳转，WinVibe 直接把焦点切到 Agent 所在的终端窗口，不用鼠标翻找。
+
+**零配置接入**
+首次启动自动检测已安装的 Agent，生成认证 Token，写入 hook 配置。重启 Agent 即生效，无需手动编辑任何文件。
+
+**全屏感知**
+检测到全屏应用（游戏、PPT、视频会议）时自动隐藏 HUD，改用系统 toast 通知，不遮挡演示内容。
+
+**用量追踪**
+实时累计工具调用次数与字符量。可设置会话预算，进度条在 70% / 90% 时分级变色预警。
+
+**像素猫**（可选）
+16×16px 的像素猫 mascot，与 Agent 状态联动 — 思考时左右张望，审批等待时伸爪催你，任务完成时尾巴竖起。默认关闭，在设置中开启。
+
+<br>
+
+---
+
+## 键盘快捷键
+
+| 按键 | 动作 |
 |------|------|
-| **多 Agent 监控** | 同时追踪 Claude Code、Codex、Gemini CLI 等，统一视角 |
-| **实时审批** | Agent 请求 PreToolUse 权限时 HUD 立即闪烁，一键 Approve / Deny |
-| **审批队列** | 多 Agent 同时请求时排队展示，支持批量 Deny |
-| **零配置接入** | 首次启动自动检测已安装 Agent 并写入 hook 配置 |
-| **终端跳转** | 一键聚焦到 Agent 运行所在的终端窗口 / Tab |
-| **用量监控** | 追踪工具调用次数与字符量，可设置会话预算 |
-| **全屏检测** | 全屏应用运行时自动隐藏 HUD，改用系统 toast 通知 |
-| **像素猫彩蛋** | 可选的 16×16px 像素猫 mascot，与 Agent 状态联动 |
+| `Y` | Approve |
+| `N` | Deny |
+| `Esc` | 折叠 HUD |
+| `Tab` | 在审批按钮间循环 |
+| `Ctrl+Shift+A` | 切换折叠 / 展开 |
 
----
-
-## 技术栈
-
-- **Shell**：[Tauri 2.0](https://tauri.app)（Rust 后端 + WebView 前端）
-- **后端**：Rust + Axum（Hook HTTP Server）
-- **前端**：React + CSS Custom Properties（Apple 玻璃风格 HUD）
-- **Hook 协议**：短轮询 + 幂等重提交（防休眠断连丢失审批）
-
----
-
-## 兼容性
-
-| 平台 | 最低版本 |
-|------|----------|
-| Windows | Windows 10 21H2 |
-| Linux | Ubuntu 22.04 / Fedora 38 |
-
-> macOS 不在计划内，请使用 [Vibe Island](https://vibeisland.app)。
+<br>
 
 ---
 
 ## 安装
 
-> **当前状态：设计阶段，尚未发布正式版本。**
+> **当前处于设计阶段，尚未发布。** 正式版本将通过 GitHub Releases 分发。
 
-正式发布后将提供：
+| 平台 | 格式 |
+|------|------|
+| Windows 10 21H2+ | `.exe` 安装包 |
+| Ubuntu 22.04 / Fedora 38+ | AppImage · `.deb` |
 
-- Windows：`.exe` 安装包（GitHub Releases）
-- Linux：AppImage / `.deb`（GitHub Releases）
+macOS 已有 [Vibe Island](https://vibeisland.app)，WinVibe 不计划支持。
+
+<br>
 
 ---
 
-## Hook 配置（Claude Code 示例）
+## Hook 配置
 
-WinVibe 首次启动会自动完成以下配置，也可手动写入 `~/.claude/settings.json`：
+WinVibe 首次启动会自动完成配置。如需手动接入，在 `~/.claude/settings.json` 中添加：
 
 ```json
 {
   "hooks": {
-    "PreToolUse": [{"matcher": ".*", "hooks": [{"type": "command", "command": "winvibe-hookcli pre-tool-use"}]}],
+    "PreToolUse":  [{"matcher": ".*", "hooks": [{"type": "command", "command": "winvibe-hookcli pre-tool-use"}]}],
     "PostToolUse": [{"matcher": ".*", "hooks": [{"type": "command", "command": "winvibe-hookcli post-tool-use"}]}],
     "Stop":        [{"hooks": [{"type": "command", "command": "winvibe-hookcli stop"}]}],
     "Notification":[{"hooks": [{"type": "command", "command": "winvibe-hookcli notification"}]}]
@@ -103,40 +133,32 @@ WinVibe 首次启动会自动完成以下配置，也可手动写入 `~/.claude/
 }
 ```
 
-`winvibe-hookcli` 是随主程序分发的轻量客户端（< 2MB），负责实现短轮询协议和幂等重提交逻辑。
+`winvibe-hookcli` 随主程序分发，< 2MB，自动处理短轮询、断连重试与休眠唤醒恢复。
+
+<br>
 
 ---
 
-## 键盘快捷键
+## 技术
 
-| 快捷键 | 功能 |
-|--------|------|
-| `Ctrl+Shift+A` | 切换 HUD 折叠 / 展开 |
-| `Y` | Approve（展开态聚焦时） |
-| `N` | Deny（展开态聚焦时） |
-| `Esc` | 折叠 HUD |
-| `Tab` | 在审批按钮间循环 |
+Tauri 2.0 · Rust · React · Axum
+
+短轮询 + 幂等重提交协议，防止系统休眠或代理断连时审批请求丢失。Hook Server 仅监听 `127.0.0.1`，Bearer Token 认证，审批决策写入审计日志。
+
+<br>
 
 ---
 
 ## 文档
 
-| 文档 | 说明 |
-|------|------|
-| [PRD.md](docs/PRD.md) | 产品需求文档 v0.9（功能、交互、安全） |
-| [UI-SPEC.md](docs/UI-SPEC.md) | 视觉与交互规范 v0.2（设计 Token、组件规格） |
-| [DESIGN-apple.md](docs/DESIGN-apple.md) | Apple HIG 设计参考 |
+[PRD v0.9](docs/PRD.md) · [UI-SPEC v0.2](docs/UI-SPEC.md) · [Design Reference](docs/DESIGN-apple.md)
+
+<br>
 
 ---
 
 ## 贡献
 
-欢迎通过 [Issues](https://github.com/yoriel-xk/WinVibe/issues) 和 [Discussions](https://github.com/yoriel-xk/WinVibe/discussions) 参与讨论。
+新 Agent 适配通过实现 `AgentAdapter` trait 提交。欢迎在 [Issues](https://github.com/yoriel-xk/WinVibe/issues) 和 [Discussions](https://github.com/yoriel-xk/WinVibe/discussions) 参与讨论。
 
-新 Agent 适配可通过实现 `AgentAdapter` trait 贡献支持。
-
----
-
-## License
-
-[MIT](LICENSE)
+[MIT License](LICENSE)
