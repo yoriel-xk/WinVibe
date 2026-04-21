@@ -100,11 +100,14 @@ pub enum CancelReason {
 ### 1.6 单 active 审批不变量
 
 - ApprovalStore 内显式 `active: Option<ApprovalId>` 字段
-- `enqueue` 时若 `active.is_some()`：
-  - 若新提交的 fingerprint 与当前 active 一致 → `EnqueueOutcome::Existing { approval, revision }`（幂等命中）
-  - 否则 → `EnqueueError::BusyAnotherActive { active }`
+- 幂等键是 `approval_id`（不是 fingerprint）。`enqueue` 决策顺序：
+  1. 若 `by_id.get(approval_id)` 命中：
+     - 若已存的 fingerprint 与本次相同 → `EnqueueOutcome::Existing { approval, revision }`（幂等重试命中，无论该审批当前是 active 还是 cached）
+     - 否则 → `EnqueueError::DuplicateIdConflict { id }`（同 id 不同 payload，hookcli 视为 fatal）
+  2. 否则若 `active.is_some()` → `EnqueueError::BusyAnotherActive { active }`（与新请求的 fingerprint 是否相同**无关**，单 active 不变量优先）
+  3. 否则正常创建 → `EnqueueOutcome::Created { approval, revision }`
 - 终态后 `active` 清零，新审批可入队
-- 历史终态保留在 `cached`，按 `max_cached` FIFO 淘汰
+- 历史终态保留在 `cached`，按 `max_cached` FIFO 淘汰；幂等查找仍命中 cached（终态返回 `Existing`，hookcli 直接消费决策）
 
 ### 1.7 幂等键与 fingerprint
 
@@ -344,7 +347,12 @@ impl ServerHandle {
 
 - `oneshot::Sender` 与 `JoinHandle` 封装在 `ServerHandleInner` 内，外部不可见；
 - 第二次 `shutdown` 返回 `ShutdownError::AlreadyShuttingDown`；
-- AppExit 流程：`ServerHandle::shutdown` → `runtime.cancel_all_pending(AppExit)` → audit `flush + shutdown` → `prevent_close` 解除。
+- AppExit 关闭顺序（必须按此严格执行，否则挂起中的 poll 客户端会先丢连接、后被取消）：
+  1. `runtime.begin_shutdown()` —— 仅阻断**新** Pending 入队（`accepting=false`），不动 in-flight 与已挂起的 long-poll；
+  2. `runtime.cancel_all_pending(AppExit).await` —— 把所有 Pending 推到 `Cancelled{AppExit}` 终态，唤醒挂起的 watch；in-flight long-poll 在同一 tick 内拿到决策并正常 200 响应；
+  3. `ServerHandle::shutdown().await` —— 等待 in-flight 请求完成回包后停 axum；
+  4. `audit.flush().await` + `audit.shutdown().await` —— 把 cancel 产生的终态行落盘后才允许进程退出；
+  5. Tauri `prevent_close` 解除，事件循环退出。
 
 ### 3.6 ApprovalLifecycleSink
 
@@ -405,31 +413,42 @@ pub struct ApprovalListSnapshot {
 
 ### 4.1 稳定错误码矩阵
 
-HTTP 错误以 JSON `{ "error": { "code": "...", "message": "...", "trace_id": "..." } }` 形式返回。code 字段在 MVP-1 内**冻结**（增加新值不视为破坏性变更，但既有 code 语义不可变）：
+HTTP 错误返回**扁平** JSON `{ "code": "...", "message": "...", "trace_id": "...", "approval_id": "..."? }`。code 字段在 MVP-1 内**冻结**（增加新值不视为破坏性变更，但既有 code 语义不可变）。所有 code 用 `snake_case`，与 hookcli/contract-tests 共享同一常量表（在 `winvibe-core::protocol::error_code`）：
 
 | HTTP | code | 含义 | 备注 |
 |---|---|---|---|
-| 200 | — | 决策已返回（含 Approved/Denied/TimedOut/Cancelled） | hookcli 据 decision 字段决定 exit code |
-| 202 | — | 短轮询窗口超时，仍 Pending | hookcli 复用 approval_id 重新 poll |
-| 400 | `bad_request` | 通用请求格式错（JSON 反序列化失败、缺字段等） | message 含具体原因 |
-| 400 | `payload_invalid` | PreToolUse payload 字段语义无效（tool_input 非 object 等） | |
+| 200 | — | 决策已返回（含 Approved/Denied/TimedOut/Cancelled） | hookcli 据 decision 字段产出 Claude Code hook JSON，进程仍 exit 0 |
+| 202 | — | 短轮询窗口超时，仍 Pending | hookcli 复用 approval_id 重新 poll，无 exit |
+| 400 | `invalid_request` | 请求结构错（JSON 反序列化失败、缺字段、字段类型不符等） | message 含具体原因 |
 | 401 | `unauthorized` | Bearer Token 缺失或不匹配 | |
-| 403 | `cors_rejected` | Origin / Host 校验失败（非 loopback、非白名单） | |
-| 409 | `busy_another_active` | 已有 active 审批，且 fingerprint 不一致 | hookcli exit 0 (allow) |
-| 409 | `duplicate_id_conflict` | 同 approval_id 已存在但 fingerprint 不一致 | hookcli 视为 fatal，exit 2 |
-| 413 | `payload_too_large` | tool_input 超过 max_tool_input_bytes（默认 1 MiB） | |
-| 422 | `payload_invalid` | payload 通过 JSON 反序列化但语义校验失败 | 与 400/payload_invalid 区别：400 用于结构错，422 用于业务约束错 |
-| 500 | `invariant_violated` | 服务端不变量被破坏（终态后仍可写、watcher 丢失等） | 同时输出 diagnostic |
-| 503 | `shutting_down` | 服务端进入 begin_shutdown 后拒绝新 Pending | hookcli 视为 fatal，exit 2 |
+| 403 | `origin_forbidden` | Origin / Host 校验失败（非 loopback、非白名单） | |
+| 409 | `busy_another_active` | 已有 active 审批 | hookcli fail-open，stdout 输出 allow JSON，exit 0 |
+| 409 | `duplicate_id` | 同 approval_id 已存在但 fingerprint 不一致 | hookcli 视为 fatal，exit 2 |
+| 413 | `payload_too_large` | tool_input 超过 max_tool_input_bytes（默认 1 MiB） | hookcli fatal，exit 2 |
+| 422 | `payload_unprocessable` | 通过反序列化但语义校验失败（tool_input 非 object 等） | hookcli fatal，exit 2 |
+| 500 | `internal_error` | 服务端不变量被破坏 | 同时输出 diagnostic |
+| 503 | `shutting_down` | 服务端进入 begin_shutdown 后拒绝新 Pending | hookcli fatal，exit 2 |
 
-### 4.2 hookcli exit code
+### 4.2 hookcli exit code 与 stdout 协议
 
-二元映射，仅 0 / 2，与 Claude Code hook 协议一致：
+hookcli 进程退出码语义**与决策无关**，仅表达「能否安全交还控制给 Claude Code」：
 
-- `0` (allow)：Approved / TimedOut / Cancelled / busy_another_active / 网络错误（fail-open，hookcli 必须打 diagnostic）
-- `2` (block)：Denied / duplicate_id_conflict / shutting_down / invariant_violated / 401 / 403 / 400 / 413 / 422
+- `0`：协议层成功——服务端给出确定结果（Decision 或 busy_another_active 或网络层 fail-open），hookcli 已经把对应的 Claude Code hook JSON 写到 stdout。Claude Code 据 stdout JSON 决定 allow/block。
+- `2`：基础设施失败——必须 fail-closed（block 该工具调用），不写 stdout JSON。命中场景：401 / 403 / 400 / 413 / 422 / 409 duplicate_id / 500 / 503 / 协议反序列化失败 / 配置加载失败。
 
-stdout 仅输出 Claude Code hook 协议所需 JSON；诊断信息走 stderr + diagnostic JSONL。
+显式枚举：
+
+| 服务端结果 | stdout (Claude Code hook JSON) | exit |
+|---|---|---|
+| 200 Approved | `{ "decision": "approve", "reason": "..." }` | 0 |
+| 200 Denied | `{ "decision": "block", "reason": "..." }` | 0 |
+| 200 TimedOut | `{ "decision": "approve", "reason": "winvibe: timed_out, fail-open" }` | 0 |
+| 200 Cancelled | `{ "decision": "approve", "reason": "winvibe: cancelled:<reason>" }` | 0 |
+| 409 busy_another_active | `{ "decision": "approve", "reason": "winvibe: another approval active" }` | 0 |
+| 网络错误 / 连不上 server | 不写 stdout | 2 (fail-closed) |
+| 401/403/400/413/422/409 duplicate_id/500/503 | 不写 stdout | 2 |
+
+stderr 始终承载诊断信息；diagnostic JSONL 是结构化版本，stderr 是人类可读版本。网络错误**必须** fail-closed（exit 2），不可为了便利 fail-open。
 
 ### 4.3 tracing 与 W3C trace-id
 
@@ -464,8 +483,8 @@ stdout 仅输出 Claude Code hook 协议所需 JSON；诊断信息走 stderr + d
 
 ### 4.4 audit JSONL
 
-- 路径：`%LOCALAPPDATA%\WinVibe\audit\YYYY-MM-DD.jsonl`，按本地日期切分。
-- 一条记录 = 一次审批终态：
+- 路径：`%LOCALAPPDATA%\WinVibe\audit\YYYY-MM-DD.jsonl`，**按 UTC 日期切分**（避免本地时区切换/夏令时跳变期间出现重复或缺失日切；时间戳本身仍含完整偏移）。
+- 一条记录 = 一次审批终态（仅事实摘要，不含原始反馈正文）：
 
   ```jsonc
   {
@@ -475,19 +494,26 @@ stdout 仅输出 Claude Code hook 协议所需 JSON；诊断信息走 stderr + d
     "tool_name": "string",
     "fingerprint": "64-hex",
     "fingerprint_version": 1,
-    "decision": { "kind": "Approved" | "Denied" | "TimedOut" | "Cancelled", "reason": "...", "feedback": "..." },
-    "created_wall": "RFC3339",
-    "decided_wall": "RFC3339",
-    "approval_trace_id": "32-hex",        // 创建审批的 TraceCtx
-    "decision_trace_id": "32-hex",        // 决策动作的 TraceCtx（可能与 approval_trace_id 相同）
+    "decision": {
+      "kind": "Approved" | "Denied" | "TimedOut" | "Cancelled",
+      "cancel_reason": "StopHook" | "AppExit" | "UserAbort",   // 仅 Cancelled
+      "feedback_present": true,                                 // bool，是否带过 feedback
+      "feedback_sha256": "64-hex",                              // optional, 仅 present 时
+      "feedback_preview": "first ≤80 chars, line-broken stripped, NFC normalized"  // optional
+    },
+    "created_wall": "RFC3339 UTC",
+    "decided_wall": "RFC3339 UTC",
+    "approval_trace_id": "32-hex",
+    "decision_trace_id": "32-hex",
     "tool_input_raw_sha256": "64-hex",
     "tool_input_canonical_sha256": "64-hex"
   }
   ```
 
+- **不**写 `decision.feedback` 原文。仅落 `feedback_sha256` + `feedback_preview`（≤80 字符截断）。如用户在配置中显式 opt-in `audit.full_feedback = true`，可改写完整正文，但默认关闭。
 - 不写中间 Pending 事件；只写终态事实。
 - AuditSink trait（async-trait，含 `flush`/`shutdown`）：实现支持 spawn-thread blocking writer + bounded mpsc 缓冲；缓冲满则丢弃并 INC `audit_dropped_total`（仅 metrics，无 panic）。
-- AppExit 流程必须完成 `flush + shutdown`，否则视为不变量破坏（500）。
+- AppExit 流程必须按 §3.5 顺序完成 `flush + shutdown`，否则视为不变量破坏（500）。
 
 ### 4.5 diagnostic JSONL
 
@@ -536,17 +562,22 @@ stdout 仅输出 Claude Code hook 协议所需 JSON；诊断信息走 stderr + d
 
 针对 §4.1 表中**每个 (HTTP, code) 组合**至少一个用例。最小集合：
 
-- `200` Approved / Denied / TimedOut / Cancelled（决策路径全覆盖）
-- `202` 短轮询超时 → hookcli 复用 id 二次 poll
-- `400 bad_request`、`400 payload_invalid`（区分结构错与业务错入口）
-- `401 unauthorized`、`403 cors_rejected`
-- `409 busy_another_active`（不同 fingerprint）、`409 duplicate_id_conflict`（同 id 不同 fingerprint）
+- `200` Approved / Denied / TimedOut / Cancelled（决策路径全覆盖；断言对应 hookcli stdout JSON 与 exit 0）
+- `202` 短轮询超时 → hookcli 复用 id 二次 poll，无 exit
+- `400 invalid_request`
+- `401 unauthorized`、`403 origin_forbidden`
+- `409 busy_another_active`（hookcli fail-open 写 allow JSON、exit 0）
+- `409 duplicate_id`（同 id 不同 fingerprint，hookcli exit 2 无 stdout）
 - `413 payload_too_large`（构造 > 1 MiB tool_input）
-- `422 payload_invalid`（payload 结构合法但 tool_name 黑名单等）
-- `500 invariant_violated`（fault injection sink）
+- `422 payload_unprocessable`（tool_input 非 object 等）
+- `500 internal_error`（fault injection sink）
 - `503 shutting_down`（先 begin_shutdown 再发新 Pending）
+- 网络层：server 不可达 → hookcli exit 2，不写 stdout（fail-closed 回归）
 
-幂等回归：同 approval_id + 同 fingerprint 多次提交，断言 `Existing` 而非 `Created`，且仅写一条 audit。
+幂等回归（与 §1.6 对齐）：
+- 同 `approval_id` + 同 fingerprint 多次提交 → `Existing`，仅一条 audit；
+- 同 `approval_id` + 不同 fingerprint → `409 duplicate_id`；
+- 不同 `approval_id`（且当前有 active）+ 同 fingerprint → `409 busy_another_active`（**不**幂等合并）。
 
 ### 5.3 winvibe-app + winvibe-hookcli 的 lib + bin 形态
 
@@ -586,13 +617,22 @@ pub struct TestClockHarness {
 }
 
 impl TestClockHarness {
-    pub fn new() -> Self;
+    /// 构造时一次性 pause tokio 时间。后续不得再次 pause()，
+    /// 否则 tokio 内部计时器状态会被打乱。
+    pub fn new() -> Self {
+        tokio::time::pause();
+        Self {
+            wall: Arc::new(FakeWallClock::default()),
+            mono: Arc::new(FakeMonotonicClock::default()),
+        }
+    }
+
     pub fn arc_wall(&self) -> Arc<dyn WallClock> { self.wall.clone() }
     pub fn arc_mono(&self) -> Arc<dyn MonotonicClock> { self.mono.clone() }
 
-    /// 同步推进 tokio::time + mono clock + wall clock，避免 sleep race
+    /// 同步推进 tokio::time + mono clock + wall clock，避免 sleep race。
+    /// 不重复 pause()。
     pub async fn advance(&self, d: Duration) {
-        tokio::time::pause();
         self.mono.advance(d);
         self.wall.advance(d);
         tokio::time::advance(d).await;
@@ -600,7 +640,7 @@ impl TestClockHarness {
 }
 ```
 
-所有涉及 TTL / 超时的测试**必须**用 harness，不得直接 `tokio::time::sleep` 真实等待。
+所有涉及 TTL / 超时的测试**必须**用 harness（`#[tokio::test(start_paused = true)]` 或 `TestClockHarness::new()` 二选一，全程不再调 `pause()`），不得直接 `tokio::time::sleep` 真实等待。
 
 ### 5.5 配置加载与校验
 
@@ -664,24 +704,47 @@ pub enum ConfigLoadError {
     Validation(#[from] ConfigValidationError),
 }
 
-pub fn load_config_app(path: &Path) -> Result<WinvibeConfig, ConfigLoadError> {
+/// App 启动主入口：负责首启 token 引导。clean install 不应直接报错，
+/// 而应生成 32 hex 随机 token 写回配置文件后再走 validate。
+pub fn load_or_init_config_app(path: &Path) -> Result<WinvibeConfig, ConfigLoadError> {
+    ensure_default_config_file(path)?;       // 文件不存在则写默认骨架（含占位 auth_token = "")
+    let bytes = std::fs::read_to_string(path)
+        .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
+    let mut raw: RawWinvibeConfig = toml::from_str(&bytes)?;
+
+    // 首启 token 引导：仅当字段缺失或为空时才生成并落盘；已有值则交给 validate 检查格式。
+    if raw.auth_token.as_deref().map_or(true, str::is_empty) {
+        let token = generate_auth_token_hex();   // 32 hex chars，CSPRNG
+        persist_auth_token(path, &token)?;       // 原子写回 toml
+        raw.auth_token = Some(token);
+    }
+
+    Ok(raw.validate()?)
+}
+
+/// 纯加载（无引导），供测试与 hookcli 侧使用。
+/// 前置条件：调用方保证 raw.auth_token 已被填充；
+/// 此处出现 None 视为编程错（不应作为运行时正常路径）。
+pub fn load_config_strict(path: &Path) -> Result<WinvibeConfig, ConfigLoadError> {
     let bytes = std::fs::read_to_string(path)
         .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
     let raw: RawWinvibeConfig = toml::from_str(&bytes)?;
-    // 前置条件：app 入口要求 auth_token 必须出现；缺失走 MissingAuthToken，
-    // 与 AuthTokenFormatInvalid（格式非法）严格分离。
     if raw.auth_token.is_none() {
+        // 严格语义分离：缺失 → MissingAuthToken；非法格式由 validate() 抛 AuthTokenFormatInvalid
         return Err(ConfigValidationError::MissingAuthToken.into());
     }
     Ok(raw.validate()?)
 }
 ```
 
+- `load_or_init_config_app` 是 app 入口的唯一推荐路径；`load_config_strict` 仅供 hookcli 与测试使用，hookcli 不参与 token 生成（首启 token 必须由 app 落盘后 hookcli 才能读到）。
+- `persist_auth_token` 必须用临时文件 + rename 原子替换，避免半写损坏配置文件。
+
 ### 5.6 安全相关测试
 
 - 启动时 `bind != IpAddr::is_loopback()` → 立即拒绝（不绑端口、不写 audit、退出码 78 `EX_CONFIG`）。
 - 缺失或畸形 Bearer Token → 401，不接续业务路径。
-- Origin / Host header 非白名单 → 403 `cors_rejected`。
+- Origin / Host header 非白名单 → 403 `origin_forbidden`。
 - IPv6 `::1` 监听通过运行时探测开启：CI 在能绑 `::1` 的 runner 上跑双栈用例，否则 skip；不引入 cfg 区分平台。
 
 ### 5.7 ts-rs drift 校验
