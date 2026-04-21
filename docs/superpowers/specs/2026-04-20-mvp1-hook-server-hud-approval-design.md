@@ -736,12 +736,16 @@ pub fn load_or_init_config_app(path: &Path) -> Result<WinvibeConfig, ConfigLoadE
 /// **用户态错误**（首启未走 app 引导、配置被人工删字段等），稳定
 /// 返回 ConfigValidationError::MissingAuthToken；调用方据此向用户提
 /// 示「先启动 WinVibe 主程序完成首启引导」。与 AuthTokenFormatInvalid
-/// （格式非法）严格分离。
+/// （格式非法，包含空串）严格分离：字段整段缺失走前者，字段存在但
+/// 内容非法走后者。
 pub fn load_config_strict(path: &Path) -> Result<WinvibeConfig, ConfigLoadError> {
     let bytes = std::fs::read_to_string(path)
         .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
     let raw: RawWinvibeConfig = toml::from_str(&bytes)?;
-    if raw.auth_token.as_deref().map_or(true, str::is_empty) {
+    // 字段缺失 vs 内容非法严格分离：仅 None 走 MissingAuthToken；
+    // Some("") / Some("   ") / 长度不足 / 非 hex 等统一交给 validate()
+    // 抛 AuthTokenFormatInvalid。
+    if raw.auth_token.is_none() {
         return Err(ConfigValidationError::MissingAuthToken.into());
     }
     Ok(raw.validate()?)
@@ -753,7 +757,7 @@ pub fn load_config_strict(path: &Path) -> Result<WinvibeConfig, ConfigLoadError>
 
 ### 5.6 安全相关测试
 
-- bind 地址在**配置加载期**校验——`RawWinvibeConfig::validate()` 解析 `bind: String` → `IpAddr`：parse 失败（如 `"localhost"`、`"abc"`、IDNA 主机名）→ `ConfigValidationError::InvalidBindAddress { raw }`；parse 成功但 `!is_loopback()` → `BindNotLoopback { raw }`。两者均映射到进程退出码 78 `EX_CONFIG`，**不**绑端口、**不**写 audit。运行时层不再做第二次 bind 安全校验，单点真相在 §5.5。contract-tests 必须分别覆盖这两个变体。
+- bind 地址在**配置加载期**校验——`RawWinvibeConfig::validate()` 解析 `bind: String` → `IpAddr`：parse 失败（如 `"localhost"`、`"abc"`、IDNA 主机名）→ `ConfigValidationError::InvalidBindAddress { raw }`；parse 成功但 `!is_loopback()` → `BindNotLoopback { raw }`。两者均映射到进程退出码 78 `EX_CONFIG`，**不**绑端口、**不**写 audit。运行时层不再做第二次 bind 安全校验，单点真相在 §5.5。**测试归属**：此两条是本地 config loader 行为，覆盖点为 `winvibe-core::config::RawWinvibeConfig::validate` 的 unit tests，以及 `winvibe-app` / `winvibe-hookcli` 各自 config_loader 的 integration tests；不进 `winvibe-contract-tests`（后者仅覆盖跨进程 HTTP/IPC 契约）。
 - 缺失或畸形 Bearer Token → 401，不接续业务路径。
 - Origin / Host header 非白名单 → 403 `origin_forbidden`。
 - IPv6 `::1` 监听通过运行时探测开启：CI 在能绑 `::1` 的 runner 上跑双栈用例，否则 skip；不引入 cfg 区分平台。
