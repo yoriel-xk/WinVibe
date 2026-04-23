@@ -5785,8 +5785,10 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "filetime",
+ "hex",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tempfile",
