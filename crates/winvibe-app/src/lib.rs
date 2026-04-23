@@ -5,3 +5,5 @@ pub mod audit;
 pub mod diagnostic;
 pub mod lifecycle_sink;
 pub mod config_loader;
+pub mod app_state;
+pub mod commands;
