@@ -3,21 +3,8 @@
 
 mod helpers;
 
-use helpers::TestServer;
+use helpers::{TestServer, http_client, extract_code, wait_for_active};
 use serde_json::Value;
-
-/// 构造 reqwest 客户端
-fn http_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .expect("构造 HTTP 客户端失败")
-}
-
-/// 从响应 JSON 中提取 code 字段
-fn extract_code(body: &Value) -> &str {
-    body.get("code").and_then(|v| v.as_str()).unwrap_or("")
-}
 
 // ── 幂等：相同 id + 相同指纹 → 返回已有审批 ──
 
@@ -54,7 +41,7 @@ async fn same_id_same_fingerprint_returns_existing() {
     });
 
     // 等待第一个请求注册到 runtime
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    wait_for_active(&srv).await;
 
     // 第二次提交：相同 id + 相同 payload → 幂等返回 Existing（202 Pending）
     let resp = client
@@ -115,7 +102,7 @@ async fn same_id_different_fingerprint_returns_409_duplicate_id() {
     });
 
     // 等待第一个请求注册
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    wait_for_active(&srv).await;
 
     // 第二次提交：相同 id 但不同 payload → 409 duplicate_id
     let resp = client
@@ -171,7 +158,7 @@ async fn different_id_same_fingerprint_with_active_returns_409_busy() {
     });
 
     // 等待第一个请求注册
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    wait_for_active(&srv).await;
 
     // 第二次提交：不同 id + 相同 payload → 409 busy_another_active
     let resp = client

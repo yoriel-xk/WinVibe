@@ -3,21 +3,8 @@
 
 mod helpers;
 
-use helpers::TestServer;
+use helpers::{TestServer, http_client, extract_code, assert_trace_id, wait_for_active};
 use serde_json::Value;
-
-/// 构造 reqwest 客户端（禁用连接池以避免端口复用问题）
-fn http_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .no_proxy()
-        .build()
-        .expect("构造 HTTP 客户端失败")
-}
-
-/// 从响应 JSON 中提取 code 字段
-fn extract_code(body: &Value) -> &str {
-    body.get("code").and_then(|v| v.as_str()).unwrap_or("")
-}
 
 // ── 401 Unauthorized ──
 
@@ -41,9 +28,7 @@ async fn test_401_unauthorized_no_token() {
     assert_eq!(resp.status().as_u16(), 401);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(extract_code(&body), "unauthorized");
-    // trace_id 应存在且非空
-    let trace_id = body.get("trace_id").and_then(|v| v.as_str()).unwrap_or("");
-    assert!(!trace_id.is_empty(), "trace_id 应存在于 401 响应中");
+    assert_trace_id(&body);
 
     srv.shutdown().await;
 }
@@ -69,6 +54,7 @@ async fn test_401_unauthorized_wrong_token() {
     assert_eq!(resp.status().as_u16(), 401);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(extract_code(&body), "unauthorized");
+    assert_trace_id(&body);
 
     srv.shutdown().await;
 }
@@ -96,6 +82,7 @@ async fn test_400_missing_x_approval_id_header() {
     assert_eq!(resp.status().as_u16(), 400);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(extract_code(&body), "invalid_request");
+    assert_trace_id(&body);
 
     srv.shutdown().await;
 }
@@ -122,6 +109,7 @@ async fn test_400_invalid_x_approval_id_header() {
     assert_eq!(resp.status().as_u16(), 400);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(extract_code(&body), "invalid_request");
+    assert_trace_id(&body);
 
     srv.shutdown().await;
 }
@@ -187,8 +175,8 @@ async fn test_409_busy_another_active() {
             .await;
     });
 
-    // 等待第一个请求注册到 runtime
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    // 等待第一个请求注册到 runtime（轮询替代固定 sleep，避免竞态）
+    wait_for_active(&srv).await;
 
     // 第二个 submit 应立即返回 409
     let resp = client
@@ -207,6 +195,7 @@ async fn test_409_busy_another_active() {
     assert_eq!(resp.status().as_u16(), 409);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(extract_code(&body), "busy_another_active");
+    assert_trace_id(&body);
 
     // 清理：中止后台任务
     first_task.abort();
@@ -234,6 +223,7 @@ async fn test_404_approval_not_found() {
     assert_eq!(resp.status().as_u16(), 404);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(extract_code(&body), "approval_not_found");
+    assert_trace_id(&body);
 
     srv.shutdown().await;
 }
@@ -265,6 +255,7 @@ async fn test_503_shutting_down() {
     assert_eq!(resp.status().as_u16(), 503);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(extract_code(&body), "shutting_down");
+    assert_trace_id(&body);
 
     srv.shutdown().await;
 }
