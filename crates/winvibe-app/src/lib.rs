@@ -4,3 +4,4 @@ pub mod redact;
 pub mod audit;
 pub mod diagnostic;
 pub mod lifecycle_sink;
+pub mod config_loader;
