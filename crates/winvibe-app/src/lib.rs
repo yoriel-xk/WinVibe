@@ -1,1 +1,2 @@
-// 占位，后续 task 填充
+pub mod ipc_error;
+pub mod hud_decision;
