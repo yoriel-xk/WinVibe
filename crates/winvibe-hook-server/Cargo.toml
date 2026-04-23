@@ -15,3 +15,4 @@ tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
+subtle.workspace = true
