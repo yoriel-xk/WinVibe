@@ -44,8 +44,7 @@ impl JsonlAuditSink {
 
 fn write_record_to_file(dir: &std::path::Path, record: &AuditRecord) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    // 从 decided_wall 截取 YYYY-MM-DD
-    let date = &record.decided_wall[..10];
+    let date = record.decided_wall.get(..10).unwrap_or("1970-01-01");
     let path = dir.join(format!("{}.jsonl", date));
     let line = serde_json::to_string(record)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
