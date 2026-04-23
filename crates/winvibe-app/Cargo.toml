@@ -24,6 +24,7 @@ tracing-subscriber.workspace = true
 async-trait.workspace = true
 toml.workspace = true
 tauri.workspace = true
+time.workspace = true
 
 [build-dependencies]
 tauri-build.workspace = true
