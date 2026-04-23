@@ -4892,6 +4892,8 @@ dependencies = [
  "once_cell",
  "rustls",
  "rustls-pki-types",
+ "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.26.11",
 ]
@@ -5835,7 +5837,9 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
+ "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
  "ureq",
