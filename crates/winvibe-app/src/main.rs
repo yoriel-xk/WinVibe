@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
 fn main() {
-    // 占位，后续 task 填充
+    winvibe_app::run();
 }
