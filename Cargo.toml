@@ -38,3 +38,5 @@ tauri = { version = "2", features = [] }
 tauri-build = "2"
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 subtle = "2"
+filetime = "0.2"
+tempfile = "3"
