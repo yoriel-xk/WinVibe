@@ -26,14 +26,22 @@ mod tests {
     #[test]
     fn all_codes_are_snake_case() {
         let codes = [
-            INVALID_REQUEST, UNAUTHORIZED, ORIGIN_FORBIDDEN,
-            BUSY_ANOTHER_ACTIVE, APPROVAL_NOT_FOUND, DUPLICATE_ID,
-            PAYLOAD_TOO_LARGE, PAYLOAD_UNPROCESSABLE, INTERNAL_ERROR,
+            INVALID_REQUEST,
+            UNAUTHORIZED,
+            ORIGIN_FORBIDDEN,
+            BUSY_ANOTHER_ACTIVE,
+            APPROVAL_NOT_FOUND,
+            DUPLICATE_ID,
+            PAYLOAD_TOO_LARGE,
+            PAYLOAD_UNPROCESSABLE,
+            INTERNAL_ERROR,
             SHUTTING_DOWN,
         ];
         for code in codes {
-            assert!(code.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
-                "error code '{}' is not snake_case", code);
+            assert!(
+                code.chars().all(|c| c.is_ascii_lowercase() || c == '_'),
+                "error code '{code}' is not snake_case"
+            );
         }
     }
 }

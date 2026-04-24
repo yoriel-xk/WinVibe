@@ -1,6 +1,6 @@
 use crate::protocol::{ApprovalId, Decision};
-use crate::trace::{TraceId, SpanId};
-use serde::{Serialize, Deserialize};
+use crate::trace::{SpanId, TraceId};
+use serde::{Deserialize, Serialize};
 
 /// 审批请求的核心实体，追踪从 Pending 到 Decided 的生命周期
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,15 +62,24 @@ pub struct ApprovalStoreLimits {
 
 impl Default for ApprovalStoreLimits {
     fn default() -> Self {
-        Self { max_active: 1, max_cached: 64 }
+        Self {
+            max_active: 1,
+            max_cached: 64,
+        }
     }
 }
 
 /// 入队操作的结果
 #[derive(Debug)]
 pub enum EnqueueOutcome {
-    Created { approval_id: ApprovalId, revision: u64 },
-    Existing { approval_id: ApprovalId, revision: u64 },
+    Created {
+        approval_id: ApprovalId,
+        revision: u64,
+    },
+    Existing {
+        approval_id: ApprovalId,
+        revision: u64,
+    },
 }
 
 /// 入队操作的错误类型
@@ -160,7 +169,10 @@ mod tests {
     #[test]
     fn enqueue_outcome_variants() {
         let id = ApprovalId::new();
-        let outcome = EnqueueOutcome::Created { approval_id: id, revision: 1 };
+        let outcome = EnqueueOutcome::Created {
+            approval_id: id,
+            revision: 1,
+        };
         assert!(matches!(outcome, EnqueueOutcome::Created { .. }));
     }
 }

@@ -4,13 +4,11 @@ use subtle::ConstantTimeEq;
 /// Bearer token 校验，匹配则通过，否则返回 AuthError
 pub fn validate_bearer_token(headers: &HeaderMap, expected: &str) -> Result<(), AuthError> {
     // 获取 Authorization header，缺失则返回 Missing 错误
-    let header = headers.get("Authorization")
-        .ok_or(AuthError::Missing)?;
+    let header = headers.get("Authorization").ok_or(AuthError::Missing)?;
     // 转换为字符串，失败则返回 Invalid 错误
     let value = header.to_str().map_err(|_| AuthError::Invalid)?;
     // 去掉 "Bearer " 前缀，格式不符则返回 Invalid 错误
-    let token = value.strip_prefix("Bearer ")
-        .ok_or(AuthError::Invalid)?;
+    let token = value.strip_prefix("Bearer ").ok_or(AuthError::Invalid)?;
 
     // 使用常量时间比较防止时序攻击
     if token.as_bytes().ct_eq(expected.as_bytes()).unwrap_u8() == 0 {
@@ -33,8 +31,8 @@ pub enum AuthError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::Request;
     use axum::body::Body;
+    use axum::http::Request;
 
     #[test]
     fn missing_token_returns_401() {

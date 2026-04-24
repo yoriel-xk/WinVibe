@@ -1,5 +1,5 @@
 use super::types::Approval;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// 审批列表的快照，用于 HUD 展示和状态同步
 #[derive(Debug, Clone, Serialize, Deserialize)]

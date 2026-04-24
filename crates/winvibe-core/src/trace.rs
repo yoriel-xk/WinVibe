@@ -17,7 +17,7 @@ impl TraceId {
     pub fn to_hex(&self) -> String {
         let mut s = String::with_capacity(32);
         for b in &self.0 {
-            s.push_str(&format!("{:02x}", b));
+            s.push_str(&format!("{b:02x}"));
         }
         s
     }
@@ -25,7 +25,10 @@ impl TraceId {
     /// 从 32 字符十六进制字符串解析
     pub fn from_hex(hex: &str) -> Result<Self, TraceParseError> {
         if hex.len() != 32 {
-            return Err(TraceParseError::InvalidLength { expected: 32, got: hex.len() });
+            return Err(TraceParseError::InvalidLength {
+                expected: 32,
+                got: hex.len(),
+            });
         }
         let mut bytes = [0u8; 16];
         for i in 0..16 {
@@ -65,7 +68,7 @@ impl SpanId {
     pub fn to_hex(&self) -> String {
         let mut s = String::with_capacity(16);
         for b in &self.0 {
-            s.push_str(&format!("{:02x}", b));
+            s.push_str(&format!("{b:02x}"));
         }
         s
     }
@@ -73,7 +76,10 @@ impl SpanId {
     /// 从 16 字符十六进制字符串解析
     pub fn from_hex(hex: &str) -> Result<Self, TraceParseError> {
         if hex.len() != 16 {
-            return Err(TraceParseError::InvalidLength { expected: 16, got: hex.len() });
+            return Err(TraceParseError::InvalidLength {
+                expected: 16,
+                got: hex.len(),
+            });
         }
         let mut bytes = [0u8; 8];
         for i in 0..8 {
@@ -152,7 +158,11 @@ impl TraceCtx {
         }
         let trace_id = TraceId::from_hex(parts[1])?;
         let span_id = SpanId::from_hex(parts[2])?;
-        Ok(Self { trace_id, entry_span_id: span_id, source })
+        Ok(Self {
+            trace_id,
+            entry_span_id: span_id,
+            source,
+        })
     }
 
     /// 便捷解析，失败返回 None，默认来源为 HookCliRequest
@@ -181,7 +191,11 @@ impl TraceCtx {
 
     /// 序列化为 W3C traceparent 格式
     pub fn to_traceparent(&self) -> String {
-        format!("00-{}-{}-01", self.trace_id.to_hex(), self.entry_span_id.to_hex())
+        format!(
+            "00-{}-{}-01",
+            self.trace_id.to_hex(),
+            self.entry_span_id.to_hex()
+        )
     }
 }
 
@@ -225,7 +239,8 @@ mod tests {
         let ctx = TraceCtx::from_traceparent(
             "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
             TraceSource::HookCliRequest,
-        ).unwrap();
+        )
+        .unwrap();
         let tp = ctx.to_traceparent();
         assert!(tp.starts_with("00-"));
         assert!(tp.ends_with("-01"));

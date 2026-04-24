@@ -7,7 +7,7 @@ use winvibe_core::protocol::{ApprovalId, CancelReason, Decision};
 use winvibe_core::trace::TraceCtx;
 use winvibe_hook_server::sink::ApprovalLifecycleSink;
 
-use crate::audit::record::{AuditDecision, AuditRecord, truncate_feedback_preview};
+use crate::audit::record::{truncate_feedback_preview, AuditDecision, AuditRecord};
 use crate::audit::AuditSink;
 use crate::diagnostic::record::{DiagnosticKind, DiagnosticRecord};
 use crate::diagnostic::DiagnosticSink;
@@ -51,7 +51,11 @@ impl AppLifecycleSink {
         audit_sink: Arc<dyn AuditSink>,
         diag_sink: Arc<DiagnosticSink>,
     ) -> Self {
-        Self { ipc, audit_sink, diag_sink }
+        Self {
+            ipc,
+            audit_sink,
+            diag_sink,
+        }
     }
 
     /// 便捷构造：从 tauri::AppHandle 创建
@@ -90,11 +94,14 @@ impl ApprovalLifecycleSink for AppLifecycleSink {
 
         // IPC 事件推送
         if let Some(ipc) = &self.ipc {
-            ipc.emit("approval_pushed", serde_json::json!({
-                "approval_id": id_str,
-                "revision": revision,
-                "trace_id": trace_id,
-            }));
+            ipc.emit(
+                "approval_pushed",
+                serde_json::json!({
+                    "approval_id": id_str,
+                    "revision": revision,
+                    "trace_id": trace_id,
+                }),
+            );
         }
 
         // diagnostic 记录
@@ -136,11 +143,14 @@ impl ApprovalLifecycleSink for AppLifecycleSink {
 
         // IPC 事件推送
         if let Some(ipc) = &self.ipc {
-            ipc.emit("approval_resolved", serde_json::json!({
-                "approval_id": id_str,
-                "revision": revision,
-                "trace_id": trace_id,
-            }));
+            ipc.emit(
+                "approval_resolved",
+                serde_json::json!({
+                    "approval_id": id_str,
+                    "revision": revision,
+                    "trace_id": trace_id,
+                }),
+            );
         }
 
         // diagnostic 记录
@@ -182,7 +192,12 @@ fn build_audit_record(approval: &Approval) -> AuditRecord {
     let approval_trace_id = approval.trace_id.to_hex();
 
     let (decision, decided_wall, decision_trace_id) = match &approval.state {
-        ApprovalState::Decided { decision, decided_wall, decision_trace_id, .. } => {
+        ApprovalState::Decided {
+            decision,
+            decided_wall,
+            decision_trace_id,
+            ..
+        } => {
             let dw = decided_wall
                 .format(&Rfc3339)
                 .unwrap_or_else(|_| "1970-01-01T00:00:00Z".into());
@@ -261,9 +276,7 @@ fn build_audit_decision(decision: &Decision) -> AuditDecision {
 }
 
 /// 计算 feedback 的 SHA256 和预览
-fn build_feedback_fields(
-    feedback: Option<&str>,
-) -> (bool, Option<String>, Option<String>) {
+fn build_feedback_fields(feedback: Option<&str>) -> (bool, Option<String>, Option<String>) {
     match feedback {
         None => (false, None, None),
         Some(text) => {
@@ -279,11 +292,11 @@ fn build_feedback_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::audit::record::AuditRecord;
     use std::sync::Mutex;
     use winvibe_core::approval::types::ApprovalState;
     use winvibe_core::protocol::{ApprovalId, Decision};
     use winvibe_core::trace::{SpanId, TraceCtx, TraceId, TraceSource};
-    use crate::audit::record::AuditRecord;
 
     /// 测试用 SpyAuditSink，记录所有写入的 records
     struct SpyAuditSink {
@@ -292,7 +305,9 @@ mod tests {
 
     impl SpyAuditSink {
         fn new() -> Self {
-            Self { records: Mutex::new(Vec::new()) }
+            Self {
+                records: Mutex::new(Vec::new()),
+            }
         }
 
         fn records_len(&self) -> usize {
@@ -403,7 +418,9 @@ mod tests {
 
     #[test]
     fn build_audit_decision_approved_with_feedback() {
-        let decision = Decision::Approved { feedback: Some("looks good".into()) };
+        let decision = Decision::Approved {
+            feedback: Some("looks good".into()),
+        };
         let audit = build_audit_decision(&decision);
         assert_eq!(audit.kind, "Approved");
         assert!(audit.feedback_present);
@@ -413,7 +430,9 @@ mod tests {
 
     #[test]
     fn build_audit_decision_cancelled_has_reason() {
-        let decision = Decision::Cancelled { reason: CancelReason::AppExit };
+        let decision = Decision::Cancelled {
+            reason: CancelReason::AppExit,
+        };
         let audit = build_audit_decision(&decision);
         assert_eq!(audit.kind, "Cancelled");
         assert_eq!(audit.cancel_reason.as_deref(), Some("AppExit"));

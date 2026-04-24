@@ -3,7 +3,7 @@
 
 mod helpers;
 
-use helpers::{TestServer, http_client, extract_code, assert_trace_id, wait_for_active};
+use helpers::{assert_trace_id, extract_code, http_client, wait_for_active, TestServer};
 use serde_json::Value;
 
 // ── 401 Unauthorized ──

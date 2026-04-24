@@ -7,10 +7,10 @@ use tokio::sync::{watch, Mutex};
 
 use winvibe_core::approval::snapshot::ApprovalListSnapshot;
 use winvibe_core::approval::store::ApprovalStore;
+use winvibe_core::approval::types::Approval;
 use winvibe_core::approval::types::{ApprovalStoreLimits, EnqueueOutcome};
 use winvibe_core::clock::{MonotonicClock, WallClock};
 use winvibe_core::protocol::{ApprovalId, CancelReason, Decision, PreToolUsePayload};
-use winvibe_core::approval::types::Approval;
 use winvibe_core::trace::TraceCtx;
 
 use crate::error::RuntimeError;
@@ -93,8 +93,14 @@ impl ApprovalRuntime {
             store.expire_due_pending();
             let outcome = store.enqueue(id, &payload, self.ttl_ms)?;
             match outcome {
-                EnqueueOutcome::Created { approval_id, revision } => (approval_id, revision, true),
-                EnqueueOutcome::Existing { approval_id, revision } => (approval_id, revision, false),
+                EnqueueOutcome::Created {
+                    approval_id,
+                    revision,
+                } => (approval_id, revision, true),
+                EnqueueOutcome::Existing {
+                    approval_id,
+                    revision,
+                } => (approval_id, revision, false),
             }
         };
 
@@ -108,10 +114,12 @@ impl ApprovalRuntime {
 
             // 通知 sink：审批已入队
             let span = tracing::info_span!("approval_pushed", %approval_id, revision);
-            self.sink.approval_pushed(trace, span, approval_id, revision);
+            self.sink
+                .approval_pushed(trace, span, approval_id, revision);
 
             // 等待决策结果
-            self.wait_for_decision(approval_id, revision, rx, wait_timeout).await
+            self.wait_for_decision(approval_id, revision, rx, wait_timeout)
+                .await
         } else {
             // 幂等重复：获取现有 Approval 并返回 Existing
             let store = self.store.lock().await;
@@ -209,10 +217,7 @@ impl ApprovalRuntime {
             let mut store = self.store.lock().await;
             store.expire_due_pending();
             let revision = store.decide(id, decision)?;
-            let approval = store
-                .get(&id)
-                .ok_or(RuntimeError::NotFound(id))?
-                .clone();
+            let approval = store.get(&id).ok_or(RuntimeError::NotFound(id))?.clone();
             (revision, approval)
         };
 
@@ -260,7 +265,8 @@ impl ApprovalRuntime {
                 }
             }
             let span = tracing::info_span!("approval_resolved", id = %active_id, revision = rev);
-            self.sink.approval_resolved(trace.clone(), span, approval, rev);
+            self.sink
+                .approval_resolved(trace.clone(), span, approval, rev);
             cancelled.push((active_id, rev));
         }
         cancelled
@@ -277,12 +283,12 @@ impl ApprovalRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use winvibe_core::clock::{FakeMonotonicClock, FakeWallClock};
-    use winvibe_core::protocol::PreToolUsePayload;
-    use winvibe_core::trace::{TraceCtx, TraceSource};
     use crate::sink::NoopSink;
     use std::sync::Arc;
     use std::time::Duration;
+    use winvibe_core::clock::{FakeMonotonicClock, FakeWallClock};
+    use winvibe_core::protocol::PreToolUsePayload;
+    use winvibe_core::trace::{TraceCtx, TraceSource};
 
     fn make_runtime() -> ApprovalRuntime {
         ApprovalRuntime::new(
@@ -307,7 +313,12 @@ mod tests {
         let rt = make_runtime();
         let trace = TraceCtx::new(TraceSource::HookCliRequest);
         let result = rt
-            .submit_pre_tool_use(trace, ApprovalId::new(), sample_payload(), Duration::from_millis(1))
+            .submit_pre_tool_use(
+                trace,
+                ApprovalId::new(),
+                sample_payload(),
+                Duration::from_millis(1),
+            )
             .await;
         assert!(matches!(result, Ok(WaitOutcome::Pending { .. })));
         let snap = rt.snapshot().await;
@@ -319,7 +330,12 @@ mod tests {
         let rt = Arc::new(make_runtime());
         let trace = TraceCtx::new(TraceSource::HookCliRequest);
         let outcome = rt
-            .submit_pre_tool_use(trace, ApprovalId::new(), sample_payload(), Duration::from_millis(1))
+            .submit_pre_tool_use(
+                trace,
+                ApprovalId::new(),
+                sample_payload(),
+                Duration::from_millis(1),
+            )
             .await
             .unwrap();
         let id = match outcome {
@@ -343,7 +359,12 @@ mod tests {
         rt.begin_shutdown();
         let trace = TraceCtx::new(TraceSource::HookCliRequest);
         let result = rt
-            .submit_pre_tool_use(trace, ApprovalId::new(), sample_payload(), Duration::from_secs(1))
+            .submit_pre_tool_use(
+                trace,
+                ApprovalId::new(),
+                sample_payload(),
+                Duration::from_secs(1),
+            )
             .await;
         assert!(matches!(result, Err(RuntimeError::ShuttingDown)));
     }

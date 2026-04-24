@@ -48,13 +48,22 @@ mod tests {
 
     #[test]
     fn hud_decision_to_core_decision() {
-        let approve = HudDecision { kind: HudDecisionKind::Approved, feedback: None };
-        assert!(matches!(approve.to_decision(), winvibe_core::protocol::Decision::Approved { .. }));
+        let approve = HudDecision {
+            kind: HudDecisionKind::Approved,
+            feedback: None,
+        };
+        assert!(matches!(
+            approve.to_decision(),
+            winvibe_core::protocol::Decision::Approved { .. }
+        ));
 
         let deny = HudDecision {
             kind: HudDecisionKind::Denied,
             feedback: Some("no".into()),
         };
-        assert!(matches!(deny.to_decision(), winvibe_core::protocol::Decision::Denied { .. }));
+        assert!(matches!(
+            deny.to_decision(),
+            winvibe_core::protocol::Decision::Denied { .. }
+        ));
     }
 }

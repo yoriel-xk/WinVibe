@@ -1,13 +1,13 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
-use crate::clock::{MonotonicClock, WallClock};
-use crate::protocol::{ApprovalId, Decision, CancelReason, PreToolUsePayload};
-use crate::session::compute_session_hash;
-use crate::trace::{TraceId, SpanId};
-use super::types::*;
-use super::fingerprint::{compute_fingerprint, sha256_hex, canonical_json};
+use super::fingerprint::{canonical_json, compute_fingerprint, sha256_hex};
 use super::snapshot::ApprovalListSnapshot;
+use super::types::*;
+use crate::clock::{MonotonicClock, WallClock};
+use crate::protocol::{ApprovalId, CancelReason, Decision, PreToolUsePayload};
+use crate::session::compute_session_hash;
+use crate::trace::{SpanId, TraceId};
 
 pub struct ApprovalStore {
     active: Option<ApprovalId>,
@@ -61,17 +61,17 @@ impl ApprovalStore {
         payload: &PreToolUsePayload,
         ttl_ms: u64,
     ) -> Result<EnqueueOutcome, EnqueueError> {
-        let fingerprint = compute_fingerprint(
-            &payload.session_id,
-            &payload.tool_name,
-            &payload.tool_input,
-        );
+        let fingerprint =
+            compute_fingerprint(&payload.session_id, &payload.tool_name, &payload.tool_input);
 
         // 幂等检查：相同 id
         if let Some(existing) = self.by_id.get(&id) {
             if existing.fingerprint == fingerprint {
                 let rev = self.revision;
-                return Ok(EnqueueOutcome::Existing { approval_id: id, revision: rev });
+                return Ok(EnqueueOutcome::Existing {
+                    approval_id: id,
+                    revision: rev,
+                });
             } else {
                 return Err(EnqueueError::DuplicateIdConflict { id });
             }
@@ -109,19 +109,27 @@ impl ApprovalStore {
         self.active = Some(id);
         let rev = self.next_revision();
 
-        Ok(EnqueueOutcome::Created { approval_id: id, revision: rev })
+        Ok(EnqueueOutcome::Created {
+            approval_id: id,
+            revision: rev,
+        })
     }
 
-    pub fn decide(
-        &mut self,
-        id: ApprovalId,
-        decision: Decision,
-    ) -> Result<u64, DecideError> {
-        let approval = self.by_id.get_mut(&id)
+    pub fn decide(&mut self, id: ApprovalId, decision: Decision) -> Result<u64, DecideError> {
+        let approval = self
+            .by_id
+            .get_mut(&id)
             .ok_or(DecideError::NotFound { id })?;
 
-        if let ApprovalState::Decided { decision: ref current, .. } = approval.state {
-            return Err(DecideError::AlreadyDecided { id, current: current.clone() });
+        if let ApprovalState::Decided {
+            decision: ref current,
+            ..
+        } = approval.state
+        {
+            return Err(DecideError::AlreadyDecided {
+                id,
+                current: current.clone(),
+            });
         }
 
         approval.state = ApprovalState::Decided {
@@ -139,16 +147,21 @@ impl ApprovalStore {
         Ok(self.next_revision())
     }
 
-    pub fn cancel(
-        &mut self,
-        id: ApprovalId,
-        reason: CancelReason,
-    ) -> Result<u64, CancelError> {
-        let approval = self.by_id.get_mut(&id)
+    pub fn cancel(&mut self, id: ApprovalId, reason: CancelReason) -> Result<u64, CancelError> {
+        let approval = self
+            .by_id
+            .get_mut(&id)
             .ok_or(CancelError::NotFound { id })?;
 
-        if let ApprovalState::Decided { decision: ref current, .. } = approval.state {
-            return Err(CancelError::AlreadyDecided { id, current: current.clone() });
+        if let ApprovalState::Decided {
+            decision: ref current,
+            ..
+        } = approval.state
+        {
+            return Err(CancelError::AlreadyDecided {
+                id,
+                current: current.clone(),
+            });
         }
 
         approval.state = ApprovalState::Decided {
@@ -194,7 +207,9 @@ impl ApprovalStore {
 
     pub fn snapshot(&self) -> ApprovalListSnapshot {
         let active = self.active.and_then(|id| self.by_id.get(&id).cloned());
-        let cached: Vec<Approval> = self.cached_order.iter()
+        let cached: Vec<Approval> = self
+            .cached_order
+            .iter()
             .filter_map(|id| self.by_id.get(id).cloned())
             .collect();
         ApprovalListSnapshot {
@@ -272,7 +287,10 @@ mod tests {
             tool_input: serde_json::json!({"path": "/tmp"}),
         };
         let result = store.enqueue(id, &p2, 300_000);
-        assert!(matches!(result, Err(EnqueueError::DuplicateIdConflict { .. })));
+        assert!(matches!(
+            result,
+            Err(EnqueueError::DuplicateIdConflict { .. })
+        ));
     }
 
     #[test]
@@ -283,7 +301,10 @@ mod tests {
         let payload = sample_payload();
         store.enqueue(id1, &payload, 300_000).unwrap();
         let result = store.enqueue(id2, &payload, 300_000);
-        assert!(matches!(result, Err(EnqueueError::BusyAnotherActive { .. })));
+        assert!(matches!(
+            result,
+            Err(EnqueueError::BusyAnotherActive { .. })
+        ));
     }
 
     #[test]
@@ -302,7 +323,9 @@ mod tests {
         let mut store = make_store();
         let id = ApprovalId::new();
         store.enqueue(id, &sample_payload(), 300_000).unwrap();
-        store.decide(id, Decision::Approved { feedback: None }).unwrap();
+        store
+            .decide(id, Decision::Approved { feedback: None })
+            .unwrap();
         let result = store.decide(id, Decision::Denied { feedback: None });
         assert!(matches!(result, Err(DecideError::AlreadyDecided { .. })));
     }
@@ -353,7 +376,9 @@ mod tests {
         assert!(snap.active.is_some());
         assert!(snap.cached.is_empty());
 
-        store.decide(id, Decision::Denied { feedback: None }).unwrap();
+        store
+            .decide(id, Decision::Denied { feedback: None })
+            .unwrap();
         let snap = store.snapshot();
         assert!(snap.active.is_none());
         assert_eq!(snap.cached.len(), 1);
@@ -362,14 +387,19 @@ mod tests {
     #[test]
     fn cached_fifo_eviction() {
         let mut store = ApprovalStore::new(
-            ApprovalStoreLimits { max_active: 1, max_cached: 2 },
+            ApprovalStoreLimits {
+                max_active: 1,
+                max_cached: 2,
+            },
             Arc::new(FakeWallClock::default()),
             Arc::new(FakeMonotonicClock::new(10_000)),
         );
         for _ in 0..3 {
             let id = ApprovalId::new();
             store.enqueue(id, &sample_payload(), 300_000).unwrap();
-            store.decide(id, Decision::Approved { feedback: None }).unwrap();
+            store
+                .decide(id, Decision::Approved { feedback: None })
+                .unwrap();
         }
         let snap = store.snapshot();
         assert_eq!(snap.cached.len(), 2);

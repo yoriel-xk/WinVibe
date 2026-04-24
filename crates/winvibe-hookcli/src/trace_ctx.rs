@@ -2,7 +2,10 @@ use winvibe_core::trace::{TraceCtx, TraceSource};
 
 /// 从 TRACEPARENT 环境变量继承 trace_id，若不存在则生成新的
 pub fn acquire_or_create_trace() -> TraceCtx {
-    match std::env::var("TRACEPARENT").ok().and_then(|v| TraceCtx::parse(&v)) {
+    match std::env::var("TRACEPARENT")
+        .ok()
+        .and_then(|v| TraceCtx::parse(&v))
+    {
         Some(inherited) => inherited,
         None => TraceCtx::new(TraceSource::HookCliRequest),
     }

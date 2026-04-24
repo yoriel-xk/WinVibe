@@ -19,7 +19,9 @@ pub struct RealMonotonicClock {
 
 impl RealMonotonicClock {
     pub fn new() -> Self {
-        Self { epoch: std::time::Instant::now() }
+        Self {
+            epoch: std::time::Instant::now(),
+        }
     }
 }
 
@@ -51,7 +53,9 @@ pub struct FakeMonotonicClock {
 
 impl FakeMonotonicClock {
     pub fn new(start_ms: u64) -> Self {
-        Self { ms: AtomicU64::new(start_ms) }
+        Self {
+            ms: AtomicU64::new(start_ms),
+        }
     }
 
     pub fn advance(&self, d: Duration) {
@@ -81,12 +85,14 @@ pub struct FakeWallClock {
 
 impl FakeWallClock {
     pub fn new(start: time::OffsetDateTime) -> Self {
-        Self { inner: std::sync::Mutex::new(start) }
+        Self {
+            inner: std::sync::Mutex::new(start),
+        }
     }
 
     pub fn advance(&self, d: Duration) {
         let mut guard = self.inner.lock().unwrap();
-        *guard = *guard + d;
+        *guard += d;
     }
 }
 
@@ -117,9 +123,8 @@ mod tests {
 
     #[test]
     fn fake_wall_advances() {
-        let clock = FakeWallClock::new(
-            time::OffsetDateTime::from_unix_timestamp(1_700_000_000).unwrap(),
-        );
+        let clock =
+            FakeWallClock::new(time::OffsetDateTime::from_unix_timestamp(1_700_000_000).unwrap());
         let t0 = clock.now();
         clock.advance(Duration::from_secs(60));
         let t1 = clock.now();

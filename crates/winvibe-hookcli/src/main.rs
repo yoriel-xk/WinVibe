@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
-use winvibe_hookcli::config_loader::{resolve_config_path, load_config_strict};
+use winvibe_hookcli::commands::pre_tool_use::{read_stdin_payload, run_pre_tool_use};
+use winvibe_hookcli::config_loader::{load_config_strict, resolve_config_path};
 use winvibe_hookcli::exit_code::ExitCode;
 use winvibe_hookcli::http_client::HookClient;
-use winvibe_hookcli::commands::pre_tool_use::{read_stdin_payload, run_pre_tool_use};
 
 #[derive(Parser)]
 #[command(name = "winvibe-hookcli")]
@@ -30,7 +30,7 @@ fn main() {
     let config = match load_config_strict(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("winvibe-hookcli: config error: {}", e);
+            eprintln!("winvibe-hookcli: config error: {e}");
             std::process::exit(ExitCode::ConfigError as i32);
         }
     };

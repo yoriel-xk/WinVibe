@@ -25,7 +25,9 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(
             "traceparent",
-            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01".parse().unwrap(),
+            "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+                .parse()
+                .unwrap(),
         );
         let ctx = extract_trace_ctx(&headers, TraceSource::HookCliRequest);
         assert_eq!(ctx.trace_id.to_hex(), "0af7651916cd43dd8448eb211c80319c");

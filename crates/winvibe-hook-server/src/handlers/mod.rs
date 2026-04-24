@@ -1,21 +1,16 @@
-pub mod submit;
 pub mod poll;
+pub mod submit;
 
-use std::sync::Arc;
-use axum::{
-    Router,
-    routing::post,
-    middleware as axum_mw,
-    extract::Request,
-    http::StatusCode,
-    Json,
-    response::Response,
-};
-use winvibe_core::trace::TraceCtx;
-use crate::runtime::ApprovalRuntime;
 use crate::middleware::auth::validate_bearer_token;
 use crate::middleware::origin::validate_origin;
 use crate::middleware::traceparent;
+use crate::runtime::ApprovalRuntime;
+use axum::{
+    extract::Request, http::StatusCode, middleware as axum_mw, response::Response, routing::post,
+    Json, Router,
+};
+use std::sync::Arc;
+use winvibe_core::trace::TraceCtx;
 
 /// 应用共享状态
 #[derive(Clone)]
@@ -31,7 +26,10 @@ pub struct AppState {
 /// - auth 中间层：拒绝无效 token
 /// - origin 最内层：拒绝非 loopback 来源
 pub fn build_router(runtime: Arc<ApprovalRuntime>, auth_token: String) -> Router {
-    let state = AppState { runtime, auth_token };
+    let state = AppState {
+        runtime,
+        auth_token,
+    };
 
     Router::new()
         .route("/v1/hook/submit", post(submit::handle_submit))
@@ -53,12 +51,15 @@ async fn auth_layer(
 ) -> Result<Response, (StatusCode, Json<winvibe_core::error::ErrorResponse>)> {
     let trace_id = req.extensions().get::<TraceCtx>().map(|t| t.trace_id_hex());
     validate_bearer_token(req.headers(), &state.auth_token).map_err(|_| {
-        (StatusCode::UNAUTHORIZED, Json(winvibe_core::error::ErrorResponse {
-            code: winvibe_core::error::UNAUTHORIZED.into(),
-            message: "invalid or missing bearer token".into(),
-            trace_id,
-            approval_id: None,
-        }))
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(winvibe_core::error::ErrorResponse {
+                code: winvibe_core::error::UNAUTHORIZED.into(),
+                message: "invalid or missing bearer token".into(),
+                trace_id,
+                approval_id: None,
+            }),
+        )
     })?;
     Ok(next.run(req).await)
 }
@@ -71,12 +72,15 @@ async fn origin_layer(
 ) -> Result<Response, (StatusCode, Json<winvibe_core::error::ErrorResponse>)> {
     let trace_id = req.extensions().get::<TraceCtx>().map(|t| t.trace_id_hex());
     validate_origin(req.headers()).map_err(|_| {
-        (StatusCode::FORBIDDEN, Json(winvibe_core::error::ErrorResponse {
-            code: winvibe_core::error::ORIGIN_FORBIDDEN.into(),
-            message: "origin/host not allowed".into(),
-            trace_id,
-            approval_id: None,
-        }))
+        (
+            StatusCode::FORBIDDEN,
+            Json(winvibe_core::error::ErrorResponse {
+                code: winvibe_core::error::ORIGIN_FORBIDDEN.into(),
+                message: "origin/host not allowed".into(),
+                trace_id,
+                approval_id: None,
+            }),
+        )
     })?;
     Ok(next.run(req).await)
 }
@@ -101,9 +105,9 @@ async fn traceparent_layer(mut req: Request, next: axum_mw::Next) -> Response {
 /// 测试辅助：构造带 NoopSink 的 ApprovalRuntime
 #[cfg(test)]
 fn test_runtime() -> Arc<ApprovalRuntime> {
-    use winvibe_core::clock::{FakeMonotonicClock, FakeWallClock};
-    use winvibe_core::approval::types::ApprovalStoreLimits;
     use crate::sink::NoopSink;
+    use winvibe_core::approval::types::ApprovalStoreLimits;
+    use winvibe_core::clock::{FakeMonotonicClock, FakeWallClock};
     Arc::new(ApprovalRuntime::new(
         ApprovalStoreLimits::default(),
         Arc::new(FakeWallClock::default()),
@@ -117,8 +121,8 @@ fn test_runtime() -> Arc<ApprovalRuntime> {
 mod tests {
     use super::*;
     use axum::http::StatusCode;
-    use axum_test::TestServer;
     use axum::http::{HeaderName, HeaderValue};
+    use axum_test::TestServer;
 
     /// 构造测试用 TestServer
     async fn test_app() -> TestServer {
@@ -235,6 +239,9 @@ mod tests {
             .await;
         // traceparent 响应头应存在且非空
         let tp = resp.header("traceparent");
-        assert!(!tp.is_empty(), "traceparent header should be present in response");
+        assert!(
+            !tp.is_empty(),
+            "traceparent header should be present in response"
+        );
     }
 }
