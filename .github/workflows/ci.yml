@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  rust:
+    name: Rust (fmt / clippy / test)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test (excludes winvibe-e2e)
+        run: cargo test --workspace --exclude winvibe-e2e -- --test-threads=1
+        timeout-minutes: 15
+
+  e2e:
+    name: E2E headless (main only)
+    runs-on: windows-latest
+    # 仅 push main 或手动触发时运行；PR 不强制跑 E2E
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build winvibe-hookcli binary
+        run: cargo build -p winvibe-hookcli
+        timeout-minutes: 10
+
+      - name: cargo test winvibe-e2e
+        run: cargo test -p winvibe-e2e -- --test-threads=1
+        timeout-minutes: 10
+
+  scripts:
+    name: PowerShell scripts
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable (for cargo metadata)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: check-deps
+        run: pwsh ./scripts/check-deps.ps1
+
+      - name: check-tracing
+        run: pwsh ./scripts/check-tracing.ps1
+
+      - name: check-ts-drift
+        run: pwsh ./scripts/check-ts-drift.ps1
+
+  frontend:
+    name: Frontend (vitest)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: pnpm install
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm test
+        working-directory: web
+        run: pnpm test
