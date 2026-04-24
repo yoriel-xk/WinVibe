@@ -60,7 +60,9 @@ fn write_record_to_file(dir: &std::path::Path, record: &AuditRecord) -> std::io:
 #[async_trait::async_trait]
 impl AuditSink for JsonlAuditSink {
     async fn write(&self, record: AuditRecord) {
-        let _ = self.tx.send(AuditSinkMessage::Write(record)).await;
+        if self.tx.send(AuditSinkMessage::Write(record)).await.is_err() {
+            tracing::warn!("审计记录发送失败: channel 已关闭或已满");
+        }
     }
 
     async fn flush(&self) -> Result<(), std::io::Error> {

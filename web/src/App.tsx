@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { ApprovalProvider, useApproval } from './context/ApprovalContext';
 import { ApprovalCard } from './components/ApprovalCard/ApprovalCard';
+import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
 import { useIpc } from './hooks/useIpc';
 import type { RedactedSnapshot, HudDecision, IpcEvent } from './types/generated';
 import styles from './App.module.css';
@@ -76,11 +77,13 @@ function AppContent() {
   );
 }
 
-// 根组件，提供 ApprovalProvider 上下文
+// 根组件，提供 ApprovalProvider 上下文 + ErrorBoundary 兜底
 export default function App() {
   return (
-    <ApprovalProvider>
-      <AppContent />
-    </ApprovalProvider>
+    <ErrorBoundary>
+      <ApprovalProvider>
+        <AppContent />
+      </ApprovalProvider>
+    </ErrorBoundary>
   );
 }

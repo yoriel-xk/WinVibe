@@ -3,6 +3,14 @@ use std::net::IpAddr;
 
 /// 校验 Origin/Host header 是否为 loopback 地址
 pub fn validate_origin(headers: &HeaderMap) -> Result<(), OriginError> {
+    let has_origin = headers.contains_key("Origin");
+    let has_host = headers.contains_key("Host");
+
+    // 要求至少存在 Origin 或 Host header 之一
+    if !has_origin && !has_host {
+        return Err(OriginError::MissingHeader);
+    }
+
     // 检查 Origin header（值为 URL，如 "http://127.0.0.1:59999"）
     if let Some(origin) = headers.get("Origin") {
         let origin_str = origin.to_str().map_err(|_| OriginError::InvalidHeader)?;
@@ -57,6 +65,8 @@ pub enum OriginError {
     InvalidHeader,
     /// 非 loopback 地址
     NonLoopback,
+    /// Origin 和 Host header 均缺失
+    MissingHeader,
 }
 
 #[cfg(test)]
@@ -135,5 +145,12 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("Origin", "http://[::1]:59999".parse().unwrap());
         assert!(validate_origin(&headers).is_ok());
+    }
+
+    #[test]
+    fn no_origin_no_host_rejected() {
+        // 既不带 Origin 也不带 Host → 应被拒绝（MissingHeader）
+        let headers = HeaderMap::new();
+        assert!(validate_origin(&headers).is_err());
     }
 }

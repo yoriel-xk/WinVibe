@@ -35,6 +35,9 @@ pub struct RevisionTick {
 }
 
 /// 审批运行时，管理 ApprovalStore 并协调 HTTP handler 与 HUD sink
+///
+/// 锁序不变式: store 与 watchers 绝不同时持有。
+/// 所有方法均先获取 store 锁完成操作后释放，再获取 watchers 锁。
 pub struct ApprovalRuntime {
     store: Mutex<ApprovalStore>,
     watchers: Mutex<HashMap<ApprovalId, watch::Sender<RevisionTick>>>,
@@ -213,10 +216,10 @@ impl ApprovalRuntime {
             (revision, approval)
         };
 
-        // 通知 watcher（store lock 已释放）
+        // 通知 watcher 并移除（store lock 已释放）
         {
-            let watchers = self.watchers.lock().await;
-            if let Some(tx) = watchers.get(&id) {
+            let mut watchers = self.watchers.lock().await;
+            if let Some(tx) = watchers.remove(&id) {
                 let _ = tx.send(RevisionTick { revision });
             }
         }
