@@ -1,0 +1,46 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+/* 等待审批 */
+.pending {
+  background-color: var(--color-warning-bg, #fef3c7);
+  color: var(--color-warning, #92400e);
+}
+
+/* 已批准 */
+.approved {
+  background-color: var(--color-success-bg, #d1fae5);
+  color: var(--color-success, #065f46);
+}
+
+/* 已拒绝 */
+.denied {
+  background-color: var(--color-error-bg, #fee2e2);
+  color: var(--color-error, #991b1b);
+}
+
+/* 已超时 */
+.timedout {
+  background-color: var(--color-neutral-bg, #f3f4f6);
+  color: var(--color-neutral, #374151);
+}
+
+/* 已取消 */
+.cancelled {
+  background-color: var(--color-neutral-bg, #f3f4f6);
+  color: var(--color-neutral, #374151);
+}
+
+/* 未知状态 */
+.unknown {
+  background-color: var(--color-neutral-bg, #f3f4f6);
+  color: var(--color-neutral, #374151);
+}

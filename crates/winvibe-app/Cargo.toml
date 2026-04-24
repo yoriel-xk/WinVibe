@@ -1,0 +1,41 @@
+[package]
+name = "winvibe-app"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "winvibe_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "winvibe-app"
+path = "src/main.rs"
+
+[dependencies]
+winvibe-core = { path = "../winvibe-core" }
+winvibe-hook-server = { path = "../winvibe-hook-server" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+async-trait.workspace = true
+toml.workspace = true
+tauri.workspace = true
+time.workspace = true
+filetime.workspace = true
+sha2.workspace = true
+hex.workspace = true
+rand.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dev-dependencies]
+ts-rs.workspace = true
+tempfile.workspace = true
+
+[features]
+ts-export = []

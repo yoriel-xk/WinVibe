@@ -1,0 +1,14 @@
+[package]
+name = "winvibe-contract-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dev-dependencies]
+winvibe-core = { path = "../winvibe-core" }
+winvibe-hook-server = { path = "../winvibe-hook-server" }
+winvibe-hookcli = { path = "../winvibe-hookcli" }
+serde_json.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+reqwest = { version = "0.12", features = ["json"] }

@@ -1,0 +1,15 @@
+[package]
+name = "winvibe-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+ryu.workspace = true
+itoa.workspace = true
+rand.workspace = true
+time.workspace = true

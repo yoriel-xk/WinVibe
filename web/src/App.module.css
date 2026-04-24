@@ -1,0 +1,30 @@
+.container {
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  padding: var(--space-lg);
+  font-family: var(--font-sans);
+}
+
+.title {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-lg);
+  color: var(--color-primary);
+}
+
+.waiting {
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+}
+
+.history {
+  margin-top: var(--space-lg);
+}
+
+.historyTitle {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-md);
+}

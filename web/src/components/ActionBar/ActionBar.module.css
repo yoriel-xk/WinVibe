@@ -1,0 +1,41 @@
+.bar {
+  display: flex;
+  gap: var(--space-sm, 8px);
+  margin-top: var(--space-md, 16px);
+}
+
+.btn {
+  flex: 1;
+  padding: var(--space-sm, 8px) var(--space-md, 16px);
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 批准按钮 */
+.approve {
+  background-color: var(--color-success, #059669);
+  color: #ffffff;
+}
+
+.approve:hover:not(:disabled) {
+  background-color: var(--color-success-hover, #047857);
+}
+
+/* 拒绝按钮 */
+.deny {
+  background-color: var(--color-error, #dc2626);
+  color: #ffffff;
+}
+
+.deny:hover:not(:disabled) {
+  background-color: var(--color-error-hover, #b91c1c);
+}
