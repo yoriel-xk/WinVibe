@@ -51,6 +51,11 @@ impl TestServer {
         format!("Bearer {}", self.token)
     }
 
+    /// 返回原始 auth token（不含 "Bearer " 前缀）
+    pub fn auth_token(&self) -> &str {
+        &self.token
+    }
+
     /// 优雅关闭服务器
     pub async fn shutdown(&self) {
         let _ = self.handle.shutdown().await;
