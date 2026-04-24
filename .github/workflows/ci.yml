@@ -60,6 +60,57 @@ jobs:
         run: cargo test -p winvibe-e2e -- --test-threads=1
         timeout-minutes: 10
 
+  coverage:
+    name: Rust coverage (llvm-cov)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate coverage (lcov)
+        run: >
+          cargo llvm-cov
+          --workspace --exclude winvibe-e2e
+          --lcov --output-path coverage.lcov
+          -- --test-threads=1
+        timeout-minutes: 20
+
+      - name: Write coverage summary to job summary
+        shell: pwsh
+        run: |
+          $json = cargo llvm-cov report --json --summary-only | ConvertFrom-Json
+          $totals = $json.data[0].totals
+          $l = [math]::Round($totals.lines.percent, 2)
+          $r = [math]::Round($totals.regions.percent, 2)
+          $f = [math]::Round($totals.functions.percent, 2)
+          $md = "## Rust Coverage Summary`n"
+          $md += "| Metric    | Coverage |`n"
+          $md += "|-----------|----------|`n"
+          $md += "| Lines     | $($l)% |`n"
+          $md += "| Regions   | $($r)% |`n"
+          $md += "| Functions | $($f)% |"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $md
+          Write-Host "Lines: $($l)%  Regions: $($r)%  Functions: $($f)%"
+        timeout-minutes: 5
+
+      - name: Upload lcov artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage-lcov
+          path: coverage.lcov
+          retention-days: 14
+
   scripts:
     name: PowerShell scripts
     runs-on: windows-latest
