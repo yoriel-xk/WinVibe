@@ -12,7 +12,7 @@ pub fn compute_session_hash(session_id: &str) -> String {
 fn hex_encode(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        s.push_str(&format!("{:02x}", b));
+        s.push_str(&format!("{b:02x}"));
     }
     s
 }

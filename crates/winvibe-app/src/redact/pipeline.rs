@@ -64,7 +64,7 @@ mod tests {
     use super::*;
     use winvibe_core::approval::types::{Approval, ApprovalState};
     use winvibe_core::protocol::{ApprovalId, Decision};
-    use winvibe_core::trace::{TraceId, SpanId};
+    use winvibe_core::trace::{SpanId, TraceId};
 
     fn make_test_approval() -> Approval {
         Approval {
@@ -132,7 +132,9 @@ mod tests {
     fn redact_decided_approved() {
         let mut approval = make_test_approval();
         approval.state = ApprovalState::Decided {
-            decision: Decision::Approved { feedback: Some("lgtm".to_string()) },
+            decision: Decision::Approved {
+                feedback: Some("lgtm".to_string()),
+            },
             decided_wall: time::OffsetDateTime::now_utc(),
             decided_mono_ms: 2000,
             decision_trace_id: TraceId::generate(),
@@ -162,6 +164,9 @@ mod tests {
         let approval = make_test_approval();
         let redacted = redact_approval_for_ipc(&approval);
         // RFC 3339 格式包含 'T' 分隔符
-        assert!(redacted.created_wall.contains('T'), "created_wall 应为 RFC 3339 格式");
+        assert!(
+            redacted.created_wall.contains('T'),
+            "created_wall 应为 RFC 3339 格式"
+        );
     }
 }

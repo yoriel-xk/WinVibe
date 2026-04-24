@@ -1,9 +1,9 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::Mutex;
-use crate::runtime::ApprovalRuntime;
 use crate::handlers::build_router;
+use crate::runtime::ApprovalRuntime;
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// 服务器内部状态，shutdown 后被 take
 struct ServerHandleInner {
@@ -40,13 +40,19 @@ impl ServerHandle {
 
         let join = tokio::spawn(async move {
             axum::serve(listener, app)
-                .with_graceful_shutdown(async { let _ = shutdown_rx.await; })
+                .with_graceful_shutdown(async {
+                    let _ = shutdown_rx.await;
+                })
                 .await
                 .ok();
         });
 
         Ok(Arc::new(Self {
-            inner: Mutex::new(Some(ServerHandleInner { shutdown_tx, join, local_addr })),
+            inner: Mutex::new(Some(ServerHandleInner {
+                shutdown_tx,
+                join,
+                local_addr,
+            })),
             shutting_down: AtomicBool::new(false),
         }))
     }
@@ -61,7 +67,11 @@ impl ServerHandle {
         if self.shutting_down.swap(true, Ordering::SeqCst) {
             return Err(ShutdownError::AlreadyShuttingDown);
         }
-        let inner = self.inner.lock().await.take()
+        let inner = self
+            .inner
+            .lock()
+            .await
+            .take()
             .ok_or(ShutdownError::AlreadyShuttingDown)?;
         let _ = inner.shutdown_tx.send(());
         let _ = inner.join.await;
@@ -71,9 +81,9 @@ impl ServerHandle {
 
 #[cfg(test)]
 fn test_runtime() -> Arc<ApprovalRuntime> {
-    use winvibe_core::clock::{FakeMonotonicClock, FakeWallClock};
-    use winvibe_core::approval::types::ApprovalStoreLimits;
     use crate::sink::NoopSink;
+    use winvibe_core::approval::types::ApprovalStoreLimits;
+    use winvibe_core::clock::{FakeMonotonicClock, FakeWallClock};
     Arc::new(ApprovalRuntime::new(
         ApprovalStoreLimits::default(),
         Arc::new(FakeWallClock::default()),
@@ -89,7 +99,9 @@ mod tests {
 
     #[tokio::test]
     async fn start_and_shutdown() {
-        let handle = ServerHandle::start("127.0.0.1:0", test_runtime(), "test-token".into()).await.unwrap();
+        let handle = ServerHandle::start("127.0.0.1:0", test_runtime(), "test-token".into())
+            .await
+            .unwrap();
         let addr = handle.local_addr();
         assert_ne!(addr.port(), 0);
         handle.shutdown().await.unwrap();
@@ -97,7 +109,9 @@ mod tests {
 
     #[tokio::test]
     async fn double_shutdown_returns_error() {
-        let handle = ServerHandle::start("127.0.0.1:0", test_runtime(), "test-token".into()).await.unwrap();
+        let handle = ServerHandle::start("127.0.0.1:0", test_runtime(), "test-token".into())
+            .await
+            .unwrap();
         handle.shutdown().await.unwrap();
         let result = handle.shutdown().await;
         assert!(result.is_err());

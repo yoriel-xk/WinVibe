@@ -81,7 +81,9 @@ mod tests {
 
     #[test]
     fn decision_approved_round_trip() {
-        let d = Decision::Approved { feedback: Some("ok".into()) };
+        let d = Decision::Approved {
+            feedback: Some("ok".into()),
+        };
         let json = serde_json::to_string(&d).unwrap();
         let d2: Decision = serde_json::from_str(&json).unwrap();
         assert!(matches!(d2, Decision::Approved { feedback: Some(f) } if f == "ok"));
@@ -89,8 +91,14 @@ mod tests {
 
     #[test]
     fn decision_cancelled_variants() {
-        for reason in [CancelReason::StopHook, CancelReason::AppExit, CancelReason::UserAbort] {
-            let d = Decision::Cancelled { reason: reason.clone() };
+        for reason in [
+            CancelReason::StopHook,
+            CancelReason::AppExit,
+            CancelReason::UserAbort,
+        ] {
+            let d = Decision::Cancelled {
+                reason: reason.clone(),
+            };
             let json = serde_json::to_string(&d).unwrap();
             let d2: Decision = serde_json::from_str(&json).unwrap();
             assert!(matches!(d2, Decision::Cancelled { .. }));

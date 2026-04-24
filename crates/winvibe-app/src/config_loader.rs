@@ -36,11 +36,13 @@ pub fn resolve_config_path_app(cli_override: Option<&Path>) -> PathBuf {
 /// 加载配置文件，不存在则创建默认文件；auth_token 为空则自动生成
 pub fn load_or_init_config_app(path: &Path) -> Result<WinvibeConfig, ConfigLoadError> {
     ensure_default_config_file(path)?;
-    let bytes = std::fs::read_to_string(path)
-        .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
+    let bytes = std::fs::read_to_string(path).map_err(|e| ConfigLoadError::Io {
+        path: path.into(),
+        source: e,
+    })?;
     let mut raw: RawWinvibeConfig = toml::from_str(&bytes)?;
 
-    if raw.auth_token.as_deref().map_or(true, str::is_empty) {
+    if raw.auth_token.as_deref().is_none_or(str::is_empty) {
         let token = generate_auth_token_hex();
         persist_auth_token(path, &token)?;
         raw.auth_token = Some(token);
@@ -54,12 +56,16 @@ fn ensure_default_config_file(path: &Path) -> Result<(), ConfigLoadError> {
         return Ok(());
     }
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
+        std::fs::create_dir_all(parent).map_err(|e| ConfigLoadError::Io {
+            path: path.into(),
+            source: e,
+        })?;
     }
     let default_content = "# WinVibe 配置文件\nbind = \"127.0.0.1\"\nport = \"59999\"\nauth_token = \"\"\napproval_ttl_ms = 300000\nmax_cached = 64\n";
-    std::fs::write(path, default_content)
-        .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
+    std::fs::write(path, default_content).map_err(|e| ConfigLoadError::Io {
+        path: path.into(),
+        source: e,
+    })?;
     Ok(())
 }
 
@@ -71,14 +77,16 @@ fn generate_auth_token_hex() -> String {
 }
 
 fn persist_auth_token(path: &Path, token: &str) -> Result<(), ConfigLoadError> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
+    let content = std::fs::read_to_string(path).map_err(|e| ConfigLoadError::Io {
+        path: path.into(),
+        source: e,
+    })?;
 
     let updated = if content.contains("auth_token") {
         let mut result = String::new();
         for line in content.lines() {
             if line.trim_start().starts_with("auth_token") {
-                result.push_str(&format!("auth_token = \"{}\"", token));
+                result.push_str(&format!("auth_token = \"{token}\""));
             } else {
                 result.push_str(line);
             }
@@ -86,15 +94,22 @@ fn persist_auth_token(path: &Path, token: &str) -> Result<(), ConfigLoadError> {
         }
         result
     } else {
-        format!("{}auth_token = \"{}\"\n", content, token)
+        format!(
+            "{content}auth_token = \"{token}\"
+"
+        )
     };
 
     // 原子写回：先写临时文件再 rename
     let tmp_path = path.with_extension("toml.tmp");
-    std::fs::write(&tmp_path, &updated)
-        .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
-    std::fs::rename(&tmp_path, path)
-        .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
+    std::fs::write(&tmp_path, &updated).map_err(|e| ConfigLoadError::Io {
+        path: path.into(),
+        source: e,
+    })?;
+    std::fs::rename(&tmp_path, path).map_err(|e| ConfigLoadError::Io {
+        path: path.into(),
+        source: e,
+    })?;
 
     Ok(())
 }
@@ -126,7 +141,10 @@ mod tests {
         .unwrap();
 
         let config = load_or_init_config_app(&path).unwrap();
-        assert_eq!(config.auth_token.as_str(), "abcdef0123456789abcdef0123456789");
+        assert_eq!(
+            config.auth_token.as_str(),
+            "abcdef0123456789abcdef0123456789"
+        );
     }
 
     #[test]

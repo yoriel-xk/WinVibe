@@ -1,5 +1,5 @@
-use sha2::{Sha256, Digest};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::io::Write;
 
 const FINGERPRINT_PREFIX: &[u8] = b"winvibe-fp\x00";
@@ -15,8 +15,11 @@ fn write_canonical(buf: &mut Vec<u8>, value: &Value) {
     match value {
         Value::Null => buf.extend_from_slice(b"null"),
         Value::Bool(b) => {
-            if *b { buf.extend_from_slice(b"true") }
-            else { buf.extend_from_slice(b"false") }
+            if *b {
+                buf.extend_from_slice(b"true")
+            } else {
+                buf.extend_from_slice(b"false")
+            }
         }
         Value::Number(n) => {
             if let Some(i) = n.as_i64() {
@@ -53,7 +56,9 @@ fn write_canonical(buf: &mut Vec<u8>, value: &Value) {
         Value::Array(arr) => {
             buf.push(b'[');
             for (i, v) in arr.iter().enumerate() {
-                if i > 0 { buf.push(b','); }
+                if i > 0 {
+                    buf.push(b',');
+                }
                 write_canonical(buf, v);
             }
             buf.push(b']');
@@ -63,7 +68,9 @@ fn write_canonical(buf: &mut Vec<u8>, value: &Value) {
             keys.sort();
             buf.push(b'{');
             for (i, key) in keys.iter().enumerate() {
-                if i > 0 { buf.push(b','); }
+                if i > 0 {
+                    buf.push(b',');
+                }
                 write_canonical(buf, &Value::String((*key).clone()));
                 buf.push(b':');
                 write_canonical(buf, &map[*key]);
@@ -102,7 +109,7 @@ pub fn sha256_hex(data: &[u8]) -> String {
 fn hex_encode(bytes: &[u8]) -> String {
     let mut s = String::with_capacity(bytes.len() * 2);
     for b in bytes {
-        s.push_str(&format!("{:02x}", b));
+        s.push_str(&format!("{b:02x}"));
     }
     s
 }
@@ -127,7 +134,7 @@ mod tests {
 
     #[test]
     fn canonical_json_normalizes_floats() {
-        let input = serde_json::json!({"x": 1.0, "y": 3.14});
+        let input = serde_json::json!({"x": 1.0, "y": 2.71});
         let canonical = canonical_json(&input);
         assert!(canonical.contains("1.0") || canonical.contains("1"));
     }

@@ -14,7 +14,7 @@ pub struct JsonlAuditSink {
 }
 
 enum AuditSinkMessage {
-    Write(AuditRecord),
+    Write(Box<AuditRecord>),
     Flush(tokio::sync::oneshot::Sender<Result<(), std::io::Error>>),
     Shutdown(tokio::sync::oneshot::Sender<Result<(), std::io::Error>>),
 }
@@ -45,7 +45,7 @@ impl JsonlAuditSink {
 fn write_record_to_file(dir: &std::path::Path, record: &AuditRecord) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let date = record.decided_wall.get(..10).unwrap_or("1970-01-01");
-    let path = dir.join(format!("{}.jsonl", date));
+    let path = dir.join(format!("{date}.jsonl"));
     let line = serde_json::to_string(record)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     use std::io::Write;
@@ -53,14 +53,19 @@ fn write_record_to_file(dir: &std::path::Path, record: &AuditRecord) -> std::io:
         .create(true)
         .append(true)
         .open(&path)?;
-    writeln!(file, "{}", line)?;
+    writeln!(file, "{line}")?;
     Ok(())
 }
 
 #[async_trait::async_trait]
 impl AuditSink for JsonlAuditSink {
     async fn write(&self, record: AuditRecord) {
-        if self.tx.send(AuditSinkMessage::Write(record)).await.is_err() {
+        if self
+            .tx
+            .send(AuditSinkMessage::Write(Box::new(record)))
+            .await
+            .is_err()
+        {
             tracing::warn!("审计记录发送失败: channel 已关闭或已满");
         }
     }

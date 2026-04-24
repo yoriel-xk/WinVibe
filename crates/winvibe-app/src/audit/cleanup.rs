@@ -8,7 +8,7 @@ pub fn cleanup_old_audit_files(dir: &Path, max_age: Duration) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().map_or(true, |e| e != "jsonl") {
+        if path.extension().is_none_or(|e| e != "jsonl") {
             continue;
         }
         let metadata = match entry.metadata() {
@@ -19,7 +19,11 @@ pub fn cleanup_old_audit_files(dir: &Path, max_age: Duration) {
             Ok(t) => t,
             Err(_) => continue,
         };
-        if SystemTime::now().duration_since(modified).unwrap_or_default() > max_age {
+        if SystemTime::now()
+            .duration_since(modified)
+            .unwrap_or_default()
+            > max_age
+        {
             if let Err(e) = std::fs::remove_file(&path) {
                 tracing::warn!(?path, error = %e, "清理过期 audit 文件失败");
             }
@@ -37,11 +41,8 @@ mod tests {
         let old_file = dir.path().join("2026-01-01.jsonl");
         std::fs::write(&old_file, "{}").unwrap();
         let old_time = SystemTime::now() - Duration::from_secs(31 * 24 * 3600);
-        filetime::set_file_mtime(
-            &old_file,
-            filetime::FileTime::from_system_time(old_time),
-        )
-        .unwrap();
+        filetime::set_file_mtime(&old_file, filetime::FileTime::from_system_time(old_time))
+            .unwrap();
         cleanup_old_audit_files(dir.path(), Duration::from_secs(30 * 24 * 3600));
         assert!(!old_file.exists());
     }

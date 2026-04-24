@@ -1,6 +1,6 @@
+use winvibe_core::approval::types::Approval;
 use winvibe_core::protocol::ApprovalId;
 use winvibe_core::trace::TraceCtx;
-use winvibe_core::approval::types::Approval;
 
 /// 审批生命周期事件 sink，由 Tauri 层实现以桥接 IPC、审计日志和诊断
 pub trait ApprovalLifecycleSink: Send + Sync {

@@ -37,8 +37,10 @@ fn default_config_path() -> PathBuf {
 
 /// 严格加载配置（auth_token 缺失视为错误）
 pub fn load_config_strict(path: &Path) -> Result<WinvibeConfig, ConfigLoadError> {
-    let bytes = std::fs::read_to_string(path)
-        .map_err(|e| ConfigLoadError::Io { path: path.into(), source: e })?;
+    let bytes = std::fs::read_to_string(path).map_err(|e| ConfigLoadError::Io {
+        path: path.into(),
+        source: e,
+    })?;
     let raw: RawWinvibeConfig = toml::from_str(&bytes)?;
     if raw.auth_token.is_none() {
         return Err(ConfigValidationError::MissingAuthToken.into());
@@ -72,8 +74,7 @@ approval_ttl_ms = 300000
 
     #[test]
     fn load_missing_file_returns_io_error() {
-        let result =
-            load_config_strict(std::path::Path::new("/nonexistent/winvibe.toml"));
+        let result = load_config_strict(std::path::Path::new("/nonexistent/winvibe.toml"));
         assert!(matches!(result, Err(ConfigLoadError::Io { .. })));
     }
 

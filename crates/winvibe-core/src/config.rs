@@ -68,23 +68,39 @@ pub struct RawWinvibeConfig {
     pub timeout_action: Option<String>,
 }
 
-fn default_bind() -> String { "127.0.0.1".into() }
-fn default_port() -> String { "59999".into() }
-fn default_ttl() -> u64 { 300_000 }
-fn default_cached() -> usize { 64 }
+fn default_bind() -> String {
+    "127.0.0.1".into()
+}
+fn default_port() -> String {
+    "59999".into()
+}
+fn default_ttl() -> u64 {
+    300_000
+}
+fn default_cached() -> usize {
+    64
+}
 
 impl RawWinvibeConfig {
     pub fn validate(self) -> Result<WinvibeConfig, ConfigValidationError> {
         // 校验 bind 地址
-        let bind: IpAddr = self.bind.parse()
-            .map_err(|_| ConfigValidationError::InvalidBindAddress { raw: self.bind.clone() })?;
+        let bind: IpAddr =
+            self.bind
+                .parse()
+                .map_err(|_| ConfigValidationError::InvalidBindAddress {
+                    raw: self.bind.clone(),
+                })?;
         if !bind.is_loopback() {
             return Err(ConfigValidationError::BindNotLoopback { raw: self.bind });
         }
 
         // 校验端口
-        let port: u16 = self.port.parse()
-            .map_err(|_| ConfigValidationError::PortOutOfRange { raw: self.port.clone() })?;
+        let port: u16 = self
+            .port
+            .parse()
+            .map_err(|_| ConfigValidationError::PortOutOfRange {
+                raw: self.port.clone(),
+            })?;
         if port == 0 {
             return Err(ConfigValidationError::PortZeroDisallowed);
         }
@@ -94,8 +110,7 @@ impl RawWinvibeConfig {
             None => return Err(ConfigValidationError::MissingAuthToken),
             Some(t) => t,
         };
-        if token_str.len() < MIN_AUTH_TOKEN_LEN
-            || !token_str.chars().all(|c| c.is_ascii_hexdigit())
+        if token_str.len() < MIN_AUTH_TOKEN_LEN || !token_str.chars().all(|c| c.is_ascii_hexdigit())
         {
             return Err(ConfigValidationError::AuthTokenFormatInvalid);
         }
@@ -113,9 +128,11 @@ impl RawWinvibeConfig {
         let timeout_action = match self.timeout_action.as_deref() {
             None | Some("deny") => TimeoutAction::Deny,
             Some("approve") => TimeoutAction::Approve,
-            Some(other) => return Err(ConfigValidationError::InvalidTimeoutAction {
-                raw: other.to_string(),
-            }),
+            Some(other) => {
+                return Err(ConfigValidationError::InvalidTimeoutAction {
+                    raw: other.to_string(),
+                })
+            }
         };
 
         Ok(WinvibeConfig {
@@ -174,7 +191,10 @@ mod tests {
             timeout_action: None,
         };
         let err = raw.validate().unwrap_err();
-        assert!(matches!(err, ConfigValidationError::InvalidBindAddress { .. }));
+        assert!(matches!(
+            err,
+            ConfigValidationError::InvalidBindAddress { .. }
+        ));
     }
 
     #[test]
@@ -202,7 +222,10 @@ mod tests {
             timeout_action: Some("skip".into()),
         };
         let err = raw.validate().unwrap_err();
-        assert!(matches!(err, ConfigValidationError::InvalidTimeoutAction { .. }));
+        assert!(matches!(
+            err,
+            ConfigValidationError::InvalidTimeoutAction { .. }
+        ));
     }
 
     #[test]
@@ -230,7 +253,10 @@ mod tests {
             timeout_action: None,
         };
         let err = raw.validate().unwrap_err();
-        assert!(matches!(err, ConfigValidationError::StaleTimeoutTooSmall { .. }));
+        assert!(matches!(
+            err,
+            ConfigValidationError::StaleTimeoutTooSmall { .. }
+        ));
     }
 
     #[test]

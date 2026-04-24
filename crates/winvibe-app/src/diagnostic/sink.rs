@@ -16,13 +16,17 @@ impl DiagnosticSink {
             return;
         }
         let approval_id = record.approval_id.as_deref().unwrap_or("unknown");
-        let path = self.dir.join(format!("{}.jsonl", approval_id));
+        let path = self.dir.join(format!("{approval_id}.jsonl"));
         if let Err(e) = self.append_record(&path, record) {
             tracing::warn!(error = %e, "写入 diagnostic 文件失败");
         }
     }
 
-    fn append_record(&self, path: &std::path::Path, record: &DiagnosticRecord) -> std::io::Result<()> {
+    fn append_record(
+        &self,
+        path: &std::path::Path,
+        record: &DiagnosticRecord,
+    ) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.dir)?;
         let line = serde_json::to_string(record)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -31,15 +35,15 @@ impl DiagnosticSink {
             .create(true)
             .append(true)
             .open(path)?;
-        writeln!(file, "{}", line)?;
+        writeln!(file, "{line}")?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::record::{DiagnosticKind, DiagnosticRecord};
     use super::*;
-    use super::super::record::{DiagnosticRecord, DiagnosticKind};
 
     #[test]
     fn sink_writes_file_per_approval_id() {

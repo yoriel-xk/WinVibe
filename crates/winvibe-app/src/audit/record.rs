@@ -37,7 +37,10 @@ impl Serialize for AuditRecord {
         map.serialize_entry("approval_trace_id", &self.approval_trace_id)?;
         map.serialize_entry("decision_trace_id", &self.decision_trace_id)?;
         map.serialize_entry("tool_input_raw_sha256", &self.tool_input_raw_sha256)?;
-        map.serialize_entry("tool_input_canonical_sha256", &self.tool_input_canonical_sha256)?;
+        map.serialize_entry(
+            "tool_input_canonical_sha256",
+            &self.tool_input_canonical_sha256,
+        )?;
         map.end()
     }
 }

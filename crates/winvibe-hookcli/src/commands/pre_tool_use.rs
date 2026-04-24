@@ -1,9 +1,9 @@
-use std::io::Read;
-use winvibe_core::config::TimeoutAction;
-use winvibe_core::protocol::{ApprovalId, PreToolUsePayload};
 use crate::exit_code::ExitCode;
 use crate::http_client::{HookClient, ServerResponse};
 use crate::trace_ctx::{acquire_or_create_trace, new_span_traceparent};
+use std::io::Read;
+use winvibe_core::config::TimeoutAction;
+use winvibe_core::protocol::{ApprovalId, PreToolUsePayload};
 
 /// 最大 stdin 读取字节数（1 MiB + 1 字节用于溢出检测）
 const MAX_STDIN_BYTES: usize = 1024 * 1024 + 1;
@@ -45,7 +45,7 @@ pub fn map_decision_to_hook_json(
         }
         other => serde_json::json!({
             "decision": "block",
-            "reason": format!("winvibe: unknown decision kind '{}'", other)
+            "reason": format!("winvibe: unknown decision kind '{other}'")
         }),
     }
 }
@@ -54,9 +54,12 @@ pub fn map_decision_to_hook_json(
 pub fn read_stdin_payload() -> Result<PreToolUsePayload, ExitCode> {
     let stdin = std::io::stdin();
     let mut buf = Vec::with_capacity(4096);
-    stdin.lock().take(MAX_STDIN_BYTES as u64).read_to_end(&mut buf)
+    stdin
+        .lock()
+        .take(MAX_STDIN_BYTES as u64)
+        .read_to_end(&mut buf)
         .map_err(|e| {
-            eprintln!("winvibe-hookcli: stdin read error: {}", e);
+            eprintln!("winvibe-hookcli: stdin read error: {e}");
             ExitCode::FailClosed
         })?;
 
@@ -66,7 +69,7 @@ pub fn read_stdin_payload() -> Result<PreToolUsePayload, ExitCode> {
     }
 
     serde_json::from_slice::<PreToolUsePayload>(&buf).map_err(|e| {
-        eprintln!("winvibe-hookcli: failed to parse stdin JSON: {}", e);
+        eprintln!("winvibe-hookcli: failed to parse stdin JSON: {e}");
         ExitCode::FailClosed
     })
 }
@@ -86,7 +89,7 @@ pub fn run_pre_tool_use(
     let payload_json = match serde_json::to_value(payload) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("winvibe-hookcli: failed to serialize payload: {}", e);
+            eprintln!("winvibe-hookcli: failed to serialize payload: {e}");
             return ExitCode::FailClosed;
         }
     };
@@ -96,7 +99,7 @@ pub fn run_pre_tool_use(
     let resp = match client.submit(&approval_id, &payload_json, &traceparent) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("winvibe-hookcli: submit error: {:?}", e);
+            eprintln!("winvibe-hookcli: submit error: {e:?}");
             return ExitCode::FailClosed;
         }
     };
@@ -114,7 +117,7 @@ pub fn run_pre_tool_use(
     // poll 循环
     loop {
         if std::time::Instant::now() >= deadline {
-            eprintln!("winvibe-hookcli: approval timed out after {} seconds", max_time_secs);
+            eprintln!("winvibe-hookcli: approval timed out after {max_time_secs} seconds");
             return ExitCode::FailClosed;
         }
 
@@ -124,7 +127,7 @@ pub fn run_pre_tool_use(
         let resp = match client.poll(&approval_id, &traceparent) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("winvibe-hookcli: poll error: {:?}", e);
+                eprintln!("winvibe-hookcli: poll error: {e:?}");
                 return ExitCode::FailClosed;
             }
         };
@@ -145,11 +148,11 @@ fn emit_decision(decision: &serde_json::Value, timeout_action: TimeoutAction) ->
     let hook_json = map_decision_to_hook_json(decision, timeout_action);
     match serde_json::to_string(&hook_json) {
         Ok(s) => {
-            println!("{}", s);
+            println!("{s}");
             ExitCode::ProtocolSuccess
         }
         Err(e) => {
-            eprintln!("winvibe-hookcli: failed to serialize hook JSON: {}", e);
+            eprintln!("winvibe-hookcli: failed to serialize hook JSON: {e}");
             ExitCode::FailClosed
         }
     }

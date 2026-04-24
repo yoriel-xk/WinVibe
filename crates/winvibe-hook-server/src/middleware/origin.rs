@@ -15,10 +15,7 @@ pub fn validate_origin(headers: &HeaderMap) -> Result<(), OriginError> {
     if let Some(origin) = headers.get("Origin") {
         let origin_str = origin.to_str().map_err(|_| OriginError::InvalidHeader)?;
         // Origin 格式: scheme://host[:port]
-        let after_scheme = origin_str
-            .split("//")
-            .nth(1)
-            .unwrap_or(origin_str);
+        let after_scheme = origin_str.split("//").nth(1).unwrap_or(origin_str);
         let host_part = extract_host(after_scheme);
         check_loopback(host_part)?;
     }

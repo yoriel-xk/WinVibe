@@ -1,5 +1,5 @@
+use winvibe_core::approval::types::{CancelError, DecideError, EnqueueError};
 use winvibe_core::protocol::ApprovalId;
-use winvibe_core::approval::types::{EnqueueError, DecideError, CancelError};
 
 /// ApprovalRuntime 运行时错误枚举
 #[derive(Debug, thiserror::Error)]

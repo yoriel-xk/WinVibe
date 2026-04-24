@@ -3,7 +3,7 @@
 
 mod helpers;
 
-use helpers::{TestServer, http_client, extract_code, wait_for_active};
+use helpers::{extract_code, http_client, wait_for_active, TestServer};
 use serde_json::Value;
 
 // ── 幂等：相同 id + 相同指纹 → 返回已有审批 ──

@@ -1,12 +1,12 @@
-pub mod ipc_error;
-pub mod hud_decision;
-pub mod redact;
-pub mod audit;
-pub mod diagnostic;
-pub mod lifecycle_sink;
-pub mod config_loader;
 pub mod app_state;
+pub mod audit;
 pub mod commands;
+pub mod config_loader;
+pub mod diagnostic;
+pub mod hud_decision;
+pub mod ipc_error;
+pub mod lifecycle_sink;
+pub mod redact;
 
 /// 关闭时所需的句柄，通过 Tauri state 管理
 #[cfg(not(test))]
@@ -26,7 +26,7 @@ pub fn run() {
     let config = match config_loader::load_or_init_config_app(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("winvibe: config error: {}", e);
+            eprintln!("winvibe: config error: {e}");
             std::process::exit(78);
         }
     };
@@ -57,9 +57,8 @@ pub fn run() {
             let handle = app.handle().clone();
 
             // JsonlAuditSink 需要 tokio runtime（内部 spawn）
-            let audit_sink: Arc<dyn audit::AuditSink> = Arc::new(
-                audit::JsonlAuditSink::new(audit_dir.clone())
-            );
+            let audit_sink: Arc<dyn audit::AuditSink> =
+                Arc::new(audit::JsonlAuditSink::new(audit_dir.clone()));
 
             // 启动时清理旧文件（后台线程，不阻塞启动）
             let audit_dir_cleanup = audit_dir.clone();
@@ -76,13 +75,12 @@ pub fn run() {
             });
 
             // 构造 lifecycle sink（带 Tauri IPC 推送，仅非测试编译可用）
-            let lifecycle_sink: Arc<dyn winvibe_hook_server::sink::ApprovalLifecycleSink> = Arc::new(
-                lifecycle_sink::AppLifecycleSink::new(
+            let lifecycle_sink: Arc<dyn winvibe_hook_server::sink::ApprovalLifecycleSink> =
+                Arc::new(lifecycle_sink::AppLifecycleSink::new(
                     Some(Arc::new(lifecycle_sink::TauriIpcEmitter::new(handle))),
                     Arc::clone(&audit_sink),
                     Arc::clone(&diag_sink_clone),
-                )
-            );
+                ));
 
             // 构造时钟和 runtime
             let wall: Arc<dyn winvibe_core::clock::WallClock> =
@@ -94,7 +92,11 @@ pub fn run() {
                 max_cached,
             };
             let runtime = Arc::new(winvibe_hook_server::runtime::ApprovalRuntime::new(
-                limits, wall, mono, lifecycle_sink, ttl_ms,
+                limits,
+                wall,
+                mono,
+                lifecycle_sink,
+                ttl_ms,
             ));
 
             // 启动 HTTP server（block_on 在 setup 中是安全的）
@@ -104,8 +106,10 @@ pub fn run() {
                     &bind_addr,
                     runtime_for_server,
                     auth_token,
-                ).await
-            }).expect("HTTP server 启动失败");
+                )
+                .await
+            })
+            .expect("HTTP server 启动失败");
 
             // 注册 AppState（供 IPC 命令使用）
             app.manage(app_state::AppState {
@@ -142,13 +146,13 @@ pub fn run() {
                     // 步骤 2：取消所有 Pending 审批
                     let trace = winvibe_core::trace::TraceCtx::new(
                         winvibe_core::trace::TraceSource::System(
-                            winvibe_core::trace::SystemTraceSource::AppExitCancel
-                        )
+                            winvibe_core::trace::SystemTraceSource::AppExitCancel,
+                        ),
                     );
-                    state.runtime.cancel_all_pending(
-                        trace,
-                        winvibe_core::protocol::CancelReason::AppExit,
-                    ).await;
+                    state
+                        .runtime
+                        .cancel_all_pending(trace, winvibe_core::protocol::CancelReason::AppExit)
+                        .await;
 
                     // 步骤 3：停止 HTTP server
                     let _ = state.server_handle.shutdown().await;

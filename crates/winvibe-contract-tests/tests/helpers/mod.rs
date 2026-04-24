@@ -15,6 +15,7 @@ pub fn extract_code(body: &serde_json::Value) -> &str {
 }
 
 /// 断言错误响应包含非空 trace_id
+#[allow(dead_code)]
 pub fn assert_trace_id(body: &serde_json::Value) {
     let trace_id = body.get("trace_id").and_then(|v| v.as_str()).unwrap_or("");
     assert!(!trace_id.is_empty(), "trace_id 应存在于错误响应中");
